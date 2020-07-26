@@ -212,7 +212,7 @@ def _dir_scan( dir_name, whitelist, qLog=None) -> classFiles:
         """Recursively yield DirEntry objects for given directory."""
         for entry in os.scandir(path):
             if entry.is_dir(follow_symlinks=False):
-                yield from scantree(entry.path)  # see below for Python 2.x
+                yield from scantree(entry.path)
             else:
                 yield entry
     #
@@ -434,7 +434,7 @@ if __name__ == '__main__':
     # 2/2 Start main worker
     loop = asyncio.get_event_loop()
     loop.set_debug(True)  # disable for production
-    loop.run_until_complete( main(qIn=qWorker,qOut=qGui, dirL=".", dirR="b") )
+    loop.run_until_complete( main(qIn=qWorker,qOut=qGui, dirL=os.path.expanduser("~/Pictures/Photos"), dirR="b") )
     global_exit=True
 
     print("The END.  __main__")

@@ -98,18 +98,21 @@ class classFiles:
                         print(f"skip - entry {fileInstance.pathbase} / {fileInstance.path} ")
 
 
-def gui_run(qin,qout):
+def gui_run(qFromWorker,qToWorker):
     global global_exit
     try:
         window = gui_setup(x=1080,y=1920,scale=0.3)
         logs=[]
+        event, values = window.read(timeout=10)
+        window.Element('listbox1').Update(["listbox1"])
+        window.FindElement('listbox2').Update(values=["listbox2"])
         while True:
             event, values = window.read(timeout=100)  # wait for up to 100 ms for a GUI event
             if event != "__TIMEOUT__":
                 print("gui_run:",event, values)
             if event == sg.WIN_CLOSED or event == 'Exit' or global_exit == True:
                 global_exit=True
-                qout.put( ("gui_state","Gui Quitting."))
+                qToWorker.put( ("gui_state","Gui Quitting."))
                 break
             elif event == 'Show':
                 # Update the "output" text element to be the value of "input" element
@@ -119,46 +122,30 @@ def gui_run(qin,qout):
                 # A shortened version of this update can be written without the ".Update"
                 # window['-OUTPUT-'](values['-IN-'])
             elif event != "__TIMEOUT__":
-                qout.put( (event,values) )
+                qToWorker.put( (event,values) )
             # --------------- Read next message coming in from threads ---------------
             try:
-                qevent,qvalue = qin.get_nowait()    # see if something has been posted to Queue
+                qevent,qvalue = qFromWorker.get_nowait()    # see if something has been posted to Queue
             except queue.Empty:                     # get_nowait() will get exception when Queue is empty
                 qevent = None                      # nothing in queue so do nothing
-            if qevent == "log":
+            if qevent == None:
+                continue
+            elif qevent == "log":
                 # print(f"gui got log qvalue={qvalue}")
                 logs.insert(0, qvalue)
                 window.FindElement('logbox').Update(values=logs[:20])
+            elif qevent in ["listbox1", "listbox2"]:
+                # listbox1 or 2, qvalues = list of text lines.
+                window.FindElement(qevent).Update(values=qvalue)
+            else:
+                print(f"gui_run received qFromWorker msg unknown {qevent=}")
         # 4 - the close
     finally:
         window.close()
 
 def gui_setup(x,y,scale) -> sg.Window:
     #image_elem = sg.Image(data=get_img_data(filename, first=True) , enable_events=True, tooltip="pieter")
-    #Samsung S7 1080x1920
     global click_max
-    image_elem = sg.Graph(
-            canvas_size=( x*scale, y*scale),
-            graph_bottom_left=(0, y),
-            graph_top_right=(x, 0),
-            key="graph",
-            background_color="red",
-            enable_events=True,
-            change_submits=True, # mouse click events
-            drag_submits=False, # mouse drag events (lot of repeat events)
-            tooltip="graph",
-            right_click_menu= [
-                                    [ "Ignored", [ "Print", "Save"]],
-                                    [ "&bb"   , ["SendClick", "3rdEntry"]],
-                                    [ "c&c"   , ["c1", "c2" ]],
-                                ],
-            )
-    coord_display_elem = sg.Text("latest coordinates", key='TextImg', size=(48, 4))
-    # define layout, show and read the form
-    col = [
-            [image_elem],
-            [coord_display_elem],
-        ]
     menu_buttons = [ "Login" , "Home", "LaunchG", "SaveImg", "RlMatch" ]
     click_max=4
     click_button_src = [ f for x in range(0,click_max) for f in (sg.Button(f"Click{x+1}",size=(6,1)),sg.Text(f"Coord{x+1}", key=f"TextClick{x+1}", size=(12,1)) )]
@@ -168,46 +155,30 @@ def gui_setup(x,y,scale) -> sg.Window:
     print(f"{split_list=}")
     click_buttons = [click_button_src[i : j] for i, j in zip([0] + split_list, split_list + [None])]
     col_files = [
-        [sg.Listbox(values=[], change_submits=True, size=(110, 20), key='listbox')],
+
         [sg.Button(b, size=(6,1)) for b in menu_buttons],
-        [sg.Button('Auto-on', size=(8,1), button_color=('white', 'green'), key='_auto_'), sg.Text(f"auto on", key="TextAuto", size=(80,1)) ],
-            click_button_src[0:8],click_button_src[8:],
+        # [sg.Button('Auto-on', size=(8,1), button_color=('white', 'green'), key='_auto_'), sg.Text(f"auto on", key="TextAuto", size=(80,1)) ],
+        #     click_button_src[0:8],click_button_src[8:],
         #[sg.Button('Login', size=(6, 1)), sg.Button('Home', size=(6,1)), sg.Button('LaunchG', size=(6,1)), sg.Button('Prev', size=(8, 2))],
         [sg.Text('Text TextInfo1', key='TextInfo1', size=(35, 1))],
-        [sg.Listbox(values=["Log msg's from q ..."], change_submits=True, size=(110, 20), key='logbox')]
+        [sg.Listbox(values=["a"], change_submits=True, size=(140, 15), key='listbox1')],
+        [sg.Listbox(values=["b"], change_submits=True, size=(140, 15), key='listbox2')],
+        [sg.Listbox(values=["Log msg's from q ..."], change_submits=True, size=(140, 15), key='logbox')]
             ]
 
-    layout = [[ sg.Column(col), sg.Column(col_files),]]
+    layout = [[ sg.Column(col_files),]]
     window = sg.Window('Photo syncer', layout, return_keyboard_events=True,
                 location=(0, 0), use_default_focus=False)
     return window
     #from https://pysimplegui.trinket.io/demo-programs#/demo-programs/design-pattern-2-persistent-window-with-updates
 
 
-def _dir_list( dir_name, whitelist, qLog=None):
-    global global_exit
-    outputList = []
-    count=0
-    t=time.time()
-    if qLog: qLog.put(("log",f"dir_list dir_name={dir_name}"))
-    for root, dirs, files in os.walk(dir_name , topdown=True):
-        #if qLog: qLog.put(("log",f"dir_list count={count} @{count/(time.time()-t):.3f}s dir {root}"))
-        for f in files:
-            count += 1
-            if os.path.splitext(f)[1][1:] in whitelist:
-                outputList.append(os.path.join(root, f))
-            else:
-                if qLog and qLog.qsize() < 2: qLog.put_nowait(("log",f"dir_list dir skip qsize={qLog.qsize()} count={count}/{(time.time()-t):.3f}s @{count/(time.time()-t):.3f}/s  t={t}   ext={os.path.splitext(f)[1]} f={os.path.join(root, f)}"))
-        if global_exit:
-            break
-    return outputList
 
-def _dir_scan( dir_name, whitelist, qLog=None) -> classFiles:
+def _dir_scan( dir_name, whitelist, files: classFiles, qLog=None, max: int = max):
     ''' fast, returns os.DirEntry (20200719 double the speed of _dir_list)
     https://docs.python.org/3/library/os.html#os.DirEntry
     '''
     global global_exit
-    f = classFiles()
     def scantree(path):
         """Recursively yield DirEntry objects for given directory."""
         for entry in os.scandir(path):
@@ -218,28 +189,32 @@ def _dir_scan( dir_name, whitelist, qLog=None) -> classFiles:
     #
     count=0
     t=time.time()
-    if qLog: qLog.put(("log",f"dir_scan dir_name={dir_name}"))
+    if qLog:
+        qLog.put(("log",f"dir_scan dir_name={dir_name}"))
+        qLog.put(("listbox1",[ f"DEBUG1{count=}", ]))
     #with os.scandir(dir_name) as it:
     for entry in scantree(dir_name):
             if entry.is_file() and os.path.splitext(entry.name)[1][1:] in whitelist:
-                f.add(classFile(pathbase=dir_name, path=entry.path, size=entry.stat(follow_symlinks=False).st_size))
+                files.add(classFile(pathbase=dir_name, path=entry.path, size=entry.stat(follow_symlinks=False).st_size))
                 count += 1
+                if qLog and qLog.qsize() < 2:
+                    qLog.put(("listbox1",[ f"_dir_scan: {count=}", ]))
             else:
-                if qLog and qLog.qsize() < 2: qLog.put(("log",f"dir_scan dir skip count={count} @{count/(time.time()-t):.3f}s t={t}   ext={os.path.splitext(entry.name)[1]} f={os.path.join(dir_name, entry.name)}"))
-                # filepath = entry.path # absolute path
-                # filesize = entry.stat().st_size
+                if qLog and qLog.qsize() < 2:
+                    qLog.put(("log",f"dir_scan dir skip count={count} @{count/(time.time()-t):.3f}s t={t}   ext={os.path.splitext(entry.name)[1]} f={os.path.join(dir_name, entry.name)}"))
             if global_exit:
                 break
-            if count > 50:
-                print("Debug call f.save")
-                f.save(pathbase=dir_name, fileHashName="/tmp/save-pesDirSyncAB.txt")
+            if count > max:
+                print("Debug call files.save")
+                files.save(pathbase=dir_name, fileHashName="/tmp/save-pesDirSyncAB.txt")
                 break
     if qLog: qLog.put(("log",f"dir_scan exit count={count} dir_name={dir_name}"))
-    return f  # classFiles
+    return files  # classFiles
 
-async def readHashDeep( filename="./hashdeep/20200719-hashdeep.hash.txt", data=dict(), root="" ):
+
+async def readHashFromFile( files: classFiles,filename="./hashdeep/20200719-hashdeep.hash.txt",  root="" ):
     import csv
-    if not "hash" in data: data["hash"] = dict()
+    if not "hash" in files: files["hash"] = dict()
     with open(filename) as csvfile:
         csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
         for counter,row in enumerate( csvreader ):
@@ -255,14 +230,14 @@ async def readHashDeep( filename="./hashdeep/20200719-hashdeep.hash.txt", data=d
                 assert len(row[1]) == len("7f44a72ad9a8928ffad9a37c9dcb46c0") , f"Error md5 length wrong ? line={counter}"
                 assert len(row[2]) == len("92126c1ef0ec2183ef72dccdff3b826b0eb41c8546b3b54d46a384b12978dba0") , "Error sha256 length wrong ? line={counter}"
                 key=row[1]+"-"+row[2]
-                if key in data['hash']:
-                    data["hash"][key]["files"].append(row[3])
+                if key in files['hash']:
+                    files["hash"][key]["files"].append(row[3])
                     # print("adding duplicate file name")
                 else:
                     # Create key Hash, dict with file size, and list of file names
-                    data["hash"][key] = { "size": int(row[0]) , "files": [ row[3] , ] }
-                # print(counter,data["hash"][key])
-    print(f"FIND Duplicates: {len( data['hash'] )} ")
+                    files["hash"][key] = { "size": int(row[0]) , "files": [ row[3] , ] }
+                # print(counter,files["hash"][key])
+    print(f"FIND Duplicates: {len( files['hash'] )} ")
     dirsRemove=[ "/.stversions/", "/backupRsyncDel-", "temp/CameraUploads/", "/CameraUploads/", "/20190000-Info/",
         "/20111030-Quinn-Hedgehog/",
         "/201310050-SydneyHarbour/", "/2013-PaulaNtshonalanga/", "/20110729-BillsBest-Sony/", "/temp/",
@@ -281,17 +256,17 @@ async def readHashDeep( filename="./hashdeep/20200719-hashdeep.hash.txt", data=d
     countZeroSize=0
     countStillDuplicate=0
     falldel = []
-    for key in data["hash"]:
-        if len( data["hash"][key]["files"] ) > 1:
-            if data["hash"][key]["size"] == 0:
-                countZeroSize =+ len(data["hash"][key]["files"])
-                falldel.extend(data["hash"][key]["files"])
+    for key in files["hash"]:
+        if len( files["hash"][key]["files"] ) > 1:
+            if files["hash"][key]["size"] == 0:
+                countZeroSize =+ len(files["hash"][key]["files"])
+                falldel.extend(files["hash"][key]["files"])
                 continue
             #  Duplicate hash
             fdel = []
             fkeep = []
             matchHistory = []
-            for f in data["hash"][key]["files"]:
+            for f in files["hash"][key]["files"]:
                 #Check if filename matches list of undesired paths
                 for match in dirsRemove:
                     if match in f:
@@ -314,7 +289,7 @@ async def readHashDeep( filename="./hashdeep/20200719-hashdeep.hash.txt", data=d
                 fkeep.append(fdel.pop(0))
                 countdel -= 1
                 # print(f" Keeping one copy, all were to be removed fkeep={fkeep}   fdel={', '.join(fdel)}  matchHistory={', '.join(matchHistory)}")
-            assert (len(fkeep)+len(fdel)) == len(data["hash"][key]["files"]) ,  "BUG lost a file ??"
+            assert (len(fkeep)+len(fdel)) == len(files["hash"][key]["files"]) ,  "BUG lost a file ??"
             assert (len(fkeep) > 0) , f"Deleting all files ? fdel={fdel}"
             if len(fkeep) == 1:
                 countclean +=1
@@ -353,17 +328,14 @@ def hashMd5Sha256(fname: str):
     print("-", flush=True, end="")
     return fsize, hash_md5.hexdigest(), hash_sha256.hexdigest() , fname
 
-async def run_file_compare(qOut,dir, qLog=None):
+async def run_file_compare( files: classFiles, qOut: queue, dir: str, qLog=None):
     global global_exit
     print(f"Start ... run_file_compare( dir={dir})")
     t = time.time()
     qOut.put(("log",f"run_file_compare: start..."))
-    # tstart=time.time()
-    # files=_dir_list( dir, ["gif", "GIF", "jpg" , "JPG", "jpeg", "png", "PNG", "mp4" ] , qLog=qOut);
-    # t_dir_list=time.time() - tstart
-    # fLen_dir_list=len(files)
+
     tstart = time.time()
-    files =_dir_scan( dir, ["gif", "GIF", "jpg" , "JPG", "jpeg", "png", "PNG", "mp4" ] , qLog=qOut)
+    _dir_scan( files=files, dir_name=dir, whitelist=["gif", "GIF", "jpg" , "JPG", "jpeg", "png", "PNG", "mp4" ] , qLog=qOut , max=100)
     t_dir_scan = time.time() - tstart
     fLen_dir_scan = len(files)
     qOut.put(("log",f"run_file_compare: found {len(files)} in {dir} in {time.time()-t:.2f}s  {len(files)/(time.time()-t):.2f}"))
@@ -393,9 +365,11 @@ async def run_file_compare(qOut,dir, qLog=None):
             except Exception as exc:
                 print('%r generated an exception: %s' % (f, exc))
             else:
-                # print('%r page is %d bytes' % (f, len(data)))
+                # print('%r page is %d bytes' % (f, len(files)))
                 hashCount += 1
-                if qLog and qLog.qsize() < 2: qLog.put(("log",f".. hashCount={hashCount} time={time.time()-thash:.2f}s {hashInfo}"))
+                if qLog and qLog.qsize() < 2:
+                    qLog.put(("log",f".. hashCount={hashCount} time={time.time()-thash:.2f}s {hashInfo}"))
+
 
         # for f in files:
         #     hashInfo = await hashMd5Sha256(f)
@@ -406,27 +380,31 @@ async def run_file_compare(qOut,dir, qLog=None):
     print("The End. run_file_compare()")
     #await readHashDeep()
 
-async def main(qIn,qOut, dirL, dirR):
+async def main(files: classFiles, qFromGui: queue, qToGui: queue) -> None:
+    ''' main worker thread uses q's to talk to gui'''
     global global_exit
-    print("Its main.")
-    asyncio.ensure_future( run_file_compare(qOut,dirL, qLog=qOut) )
+    print("Its main worker.")
+    dirPrimary = os.path.expanduser("~/Pictures/Photos")
+    asyncio.ensure_future( readHashFromFile( filename="hashdeep.hash.txt", files=files, root=dirPrimary) )
+    asyncio.ensure_future( run_file_compare(qOut=qToGui, dir=dirPrimary , files=files, qLog=qToGui) )
     while not global_exit:
         try:
-            event,value = qIn.get_nowait()    # see if something has been posted to Queue
+            event,value = qFromGui.get_nowait()    # see if something has been posted to Queue
         except queue.Empty:                     # get_nowait() will get exception when Queue is empty
             event = None                      # nothing in queue so do nothing
             await asyncio.sleep(1)
         if event:
-            print(f"main worker got event={event} value={value} global_exit={global_exit}")
+            print(f"main worker got {event=} {value=} {global_exit=}")
 
     print("The end. main.")
 
 
 
 if __name__ == '__main__':
-    #Start PySimpleGui in own thread
+    '''Start PySimpleGui in own thread and then asyncio worker main'''
     qGui = queue.Queue()
     qWorker = queue.Queue()
+    files = classFiles()
     # 1/2 Start gui
     thread_id_gui = threading.Thread(target=gui_run, args=(qGui,qWorker,), daemon=True)
     thread_id_gui.start()
@@ -434,7 +412,7 @@ if __name__ == '__main__':
     # 2/2 Start main worker
     loop = asyncio.get_event_loop()
     loop.set_debug(True)  # disable for production
-    loop.run_until_complete( main(qIn=qWorker,qOut=qGui, dirL=os.path.expanduser("~/Pictures/Photos"), dirR="b") )
+    loop.run_until_complete( main(files=files, qFromGui=qWorker, qToGui=qGui) )
     global_exit=True
 
     print("The END.  __main__")

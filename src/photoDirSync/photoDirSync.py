@@ -48,7 +48,7 @@ class classFiles:
         return len(self.dictFile)
 
     def __getitem__(self, key) -> classFile:
-        return self.dictFile[key]
+        return self.dictFile.get(key, [])
 
     def __iter__(self):
         return iter(self.dictFile)
@@ -158,6 +158,11 @@ def _dir_scan( dir_name, whitelist, files: classFiles, qLog=(None,""), max: int 
 
 async def readHashFromFile( files: classFiles,filename="./hashdeep/20200719-hashdeep.hash.txt",  root="" ) -> None:
     import csv
+    global exitFlag
+    if not os.path.exists(filename):
+        print(f"Debug: readHashFromFile missing file {filename}")
+        exitFlag = True
+        exit(1)
     with open(filename) as csvfile:
         csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
         for counter,row in enumerate( csvreader ):
@@ -173,12 +178,12 @@ async def readHashFromFile( files: classFiles,filename="./hashdeep/20200719-hash
                 assert len(row[1]) == len("7f44a72ad9a8928ffad9a37c9dcb46c0") , f"Error md5 length wrong ? line={counter}"
                 assert len(row[2]) == len("92126c1ef0ec2183ef72dccdff3b826b0eb41c8546b3b54d46a384b12978dba0") , "Error sha256 length wrong ? line={counter}"
                 key=row[1]+"-"+row[2]
-                if key in files['hash']:
-                    files["hash"][key]["files"].append(row[3])
+                if key in files.dictHash:
+                    files.dictHash[key]["files"].append(row[3])
                     # print("adding duplicate file name")
                 else:
                     # Create key Hash, dict with file size, and list of file names
-                    files["hash"][key] = { "size": int(row[0]) , "files": [ row[3] , ] }
+                    files.dictHash[key] = { "size": int(row[0]) , "files": [ row[3] , ] }
                 # print(counter,files["hash"][key])
     print(f"FIND Duplicates: {len( files['hash'] )} ")
     dirsRemove=[ "/.stversions/", "/backupRsyncDel-", "temp/CameraUploads/", "/CameraUploads/", "/20190000-Info/",
@@ -322,17 +327,20 @@ async def run_file_compare( files: classFiles, dir: str, qLog=(None,"event")) ->
 async def main(files: classFiles, qFromGui: queue, qToGui: queue) -> None:
     ''' main worker thread uses q's to talk to gui'''
     print("Its main worker.")
+    qToGui.put(("lb1",f"Its main worker. START"))
     dirPrimary = os.path.expanduser("~/Pictures/Photos")
     asyncio.ensure_future( readHashFromFile( filename="hashdeep.hash.txt", files=files, root=dirPrimary) )
     asyncio.ensure_future( run_file_compare( dir=dirPrimary , files=files, qLog=(qToGui,"lb2")) )
     while not globals.exitFlag:
         try:
-            event,value = qFromGui.get_nowait()    # see if something has been posted to Queue
+            event,values = qFromGui.get_nowait()    # see if something has been posted to Queue
         except queue.Empty:                     # get_nowait() will get exception when Queue is empty
             event = None                      # nothing in queue so do nothing
             await asyncio.sleep(1)
         if event:
-            print(f"main worker got {event=} {value=} {globals.exitFlag=}")
+            print(f"photoDirSync.py main: qFromGui {event=} {values=} {globals.exitFlag=}")
+            if event == "SaveImg":
+                qToGui.put(("lb1",f"Got [SaveImg] event in photodirSync.py"))
 
     print("The end. main.")
 

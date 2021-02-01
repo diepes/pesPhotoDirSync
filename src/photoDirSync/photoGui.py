@@ -27,7 +27,7 @@ def gui_run(qFromWorker,qToWorker):
         while True:
             event, values = window.read(timeout=100)  # wait for up to 100 ms for a GUI event
             if event != "__TIMEOUT__":
-                print("gui_run:",event, values)
+                print(f"gui_run: {event=} {values=}")
             if event == sg.WIN_CLOSED or event == 'Exit' or globals.exitFlag == True:
                 globals.exitFlag=True
                 qToWorker.put( ("gui_state","Gui Quitting."))
@@ -54,9 +54,11 @@ def gui_run(qFromWorker,qToWorker):
                 window.FindElement('logbox').Update(values=logsContent[:20])
                 del logsContent[50:]
             elif qevent in ["lb1", "lb2"]:
-                # lb1 or 2, qvalues = list of text lines.
-                if not isinstance(qvalue, list): qvalue = list(qvalue, )
-                window.FindElement(qevent).Update( values=qvalue )
+                # lb1 or 2, qvalues = list of text lines
+                if not isinstance(qvalue, list): qvalue = listboxContent[qevent] + [qvalue, ]
+                window[qevent].update( values=qvalue )
+                print(f"photoGui.py update {qevent=} with {qvalue=} {listboxContent[qevent]=}... ")
+                listboxContent[qevent] = qvalue
             else:
                 print(f"gui_run received qFromWorker msg unknown {qevent=}")
         # 4 - the close
@@ -81,9 +83,9 @@ def gui_setup(x,y,scale) -> sg.Window:
         #     click_button_src[0:8],click_button_src[8:],
         #[sg.Button('Login', size=(6, 1)), sg.Button('Home', size=(6,1)), sg.Button('LaunchG', size=(6,1)), sg.Button('Prev', size=(8, 2))],
         [sg.Text('Text TextInfo1', key='TextInfo1', size=(35, 1))],
-        [sg.Listbox(values=["a"], change_submits=True, size=(140, 15), key='lb1')],
-        [sg.Listbox(values=["b"], change_submits=True, size=(140, 15), key='lb2')],
-        [sg.Listbox(values=["Log msg's from q ..."], change_submits=True, size=(140, 15), key='logbox')]
+        [sg.Listbox(values=["a"], change_submits=True, size=(120, 10), key='lb1')],
+        [sg.Listbox(values=["b"], change_submits=True, size=(120, 10), key='lb2')],
+        [sg.Listbox(values=["Log msg's from q ..."], change_submits=True, size=(140, 10), key='logbox')]
             ]
 
     layout = [[ sg.Column(col_files),]]

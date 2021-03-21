@@ -8,7 +8,7 @@
     20200718 Currently only one dir , use hashdeep hash info to find duplicates
         - run hashdeep
 '''
-import globals
+from . import globals
 import PySimpleGUI as sg
 import sys
 import time
@@ -57,8 +57,10 @@ def gui_run(qFromWorker,qToWorker):
                 # lb1 or 2, qvalues = list of text lines
                 if not isinstance(qvalue, list): qvalue = listboxContent[qevent] + [qvalue, ]
                 window[qevent].update( values=qvalue )
-                print(f"photoGui.py update {qevent=} with {qvalue=} {listboxContent[qevent]=}... ")
+                ## print(f"photoGui.py update {qevent=} with {qvalue=} {listboxContent[qevent]=}... ")
                 listboxContent[qevent] = qvalue
+            elif qevent in ["TextInfo1"]:
+                window[qevent].update( value=qvalue )
             else:
                 print(f"gui_run received qFromWorker msg unknown {qevent=}")
         # 4 - the close

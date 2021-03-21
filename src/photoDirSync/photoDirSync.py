@@ -8,8 +8,8 @@
     20200718 Currently only one dir , use hashdeep hash info to find duplicates
         - run hashdeep
 '''
-import photoGui
-import globals
+from . import photoGui
+from . import globals
 
 from dataclasses import dataclass
 #import EXIF
@@ -69,7 +69,7 @@ class classFiles:
             file.getSize, file.getMd5, file.getSha256, getFname = hashMd5Sha256(os.path.join(file.pathbase,file.path))
             file.flagCalculatedHash = True
             assert size == file.size, f"Error file size changed for {file.pathbase=} {file.path=} {getFname=}"
-        print(f"{file.path=} {len(self.dictFile)}")
+        # print(f"{file.path=} {len(self.dictFile)}")
         if file.path in self.dictFile.keys():
             #
             print(f"Debug: add found dup {file.path}")
@@ -120,7 +120,12 @@ class classFiles:
         return countNew
 
 
-def _dir_scan( dir_name, whitelist, files: classFiles, qLog=(None,""), max: int = max):
+def _dir_scan(dir_name,
+              whitelist,
+              files: classFiles,
+              qLog=(None,""),
+              max: int = max,
+              ):
     ''' fast, returns os.DirEntry (20200719 double the speed of _dir_list)
     https://docs.python.org/3/library/os.html#os.DirEntry
     '''
@@ -156,7 +161,9 @@ def _dir_scan( dir_name, whitelist, files: classFiles, qLog=(None,""), max: int 
     return files  # classFiles
 
 
-async def readHashFromFile( files: classFiles,filename="./hashdeep/20200719-hashdeep.hash.txt",  root="" ) -> None:
+async def readHashFromFile(files: classFiles,
+                           filename,
+                           ) -> None:
     import csv
     global exitFlag
     if not os.path.exists(filename):
@@ -171,7 +178,6 @@ async def readHashFromFile( files: classFiles,filename="./hashdeep/20200719-hash
                 if "Invoked from:" in row[0]:
                     basepath = row[0].split(":")[1].strip()
                     print(f" basepath from hashdeep {basepath}")
-
             else:
                 # print(row)
                 # print(row[2])
@@ -264,7 +270,7 @@ async def readHashFromFile( files: classFiles,filename="./hashdeep/20200719-hash
 
 def hashMd5Sha256(fname: str):
     ''' Calc both hashes from one file stream '''
-    print("+", flush=True, end="")
+    # print("+", flush=True, end="")
     os.environ['PYTHONHASHSEED'] = '0'  # disable salt
     hash_md5 = hashlib.md5()
     hash_sha256 = hashlib.sha256()
@@ -273,26 +279,30 @@ def hashMd5Sha256(fname: str):
             hash_md5.update(chunk)
             hash_sha256.update(chunk)
     fsize=os.stat(fname).st_size
-    print("-", flush=True, end="")
+    # print("-", flush=True, end="")
     return fsize, hash_md5.hexdigest(), hash_sha256.hexdigest() , fname
 
-async def run_file_compare( files: classFiles, dir: str, qLog=(None,"event")) -> None:
-    print(f"Start ... run_file_compare( dir={dir})")
+async def run_file_compare( files: classFiles, dir: str, qLog, qInfo) -> None:
+    print(f"Start ... run_file_compare: dir={dir}")
     t = time.time()
     qLog[0].put((qLog[1],f"run_file_compare: start..."))
-
     tstart = time.time()
-    _dir_scan( files=files, dir_name=dir, whitelist=["gif", "GIF", "jpg" , "JPG", "jpeg", "png", "PNG", "mp4" ] , qLog=qLog , max=100)
+    _dir_scan(files=files, dir_name=dir,
+              whitelist=["gif", "GIF", "jpg" , "JPG", "jpeg", "png", "PNG", "mp4" ],
+              qLog=qLog , max=100000,
+              )
     t_dir_scan = time.time() - tstart
     fLen_dir_scan = len(files)
     qLog[0].put((qLog[1],f"run_file_compare: found {len(files)} in {dir} in {time.time()-t:.2f}s  {len(files)/(time.time()-t):.2f}"))
     print(f"run_file_compare: found {len(files)} files in {dir} in {time.time()-t:.2f}s")
-    print(next(iter(files)))
+    # print(next(iter(files)))
     # print(f"t_dir_list={t_dir_list} fLen_dir_list={fLen_dir_list}     t_dir_scan={t_dir_scan} fLen_dir_scan={fLen_dir_scan}")
     await asyncio.sleep(2)
-    print(f"Test hash") ; qLog[0].put((qLog[1],f"Test hash"))
+    print(f"run_file_compare:Test hash")
+    qLog[0].put((qLog[1],f"run_file_compare:Test hash"))
     hashCount = 0
-    max = 10000
+    hashErr = 0
+    max = 100000
     thash = time.time()
     # We can use a with statement to ensure threads are cleaned up promptly
     # max_workers=5 ( Defaut CPU*4 )
@@ -311,26 +321,31 @@ async def run_file_compare( files: classFiles, dir: str, qLog=(None,"event")) ->
                 hashInfo = future.result()
             except Exception as exc:
                 print('%r generated an exception: %s' % (f, exc))
+                hashErr += 1
+                qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
             else:
                 # print('%r page is %d bytes' % (f, len(files)))
                 hashCount += 1
                 if qLog[0] and qLog[0].qsize() < 2:
+                    qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
                     qLog[0].put( (qLog[1],f"..{hashCount=} time={time.time()-thash:.2f}s {hashInfo=}") )
 
-        # for f in files:
-        #     hashInfo = await hashMd5Sha256(f)
-        #     hashCount += 1
-
+    qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
     print("The End. run_file_compare()")
-    #await readHashDeep()
+
 
 async def main(files: classFiles, qFromGui: queue, qToGui: queue) -> None:
     ''' main worker thread uses q's to talk to gui'''
     print("Its main worker.")
     qToGui.put(("lb1",f"Its main worker. START"))
     dirPrimary = os.path.expanduser("~/Pictures/Photos")
-    asyncio.ensure_future( readHashFromFile( filename="hashdeep.hash.txt", files=files, root=dirPrimary) )
-    asyncio.ensure_future( run_file_compare( dir=dirPrimary , files=files, qLog=(qToGui,"lb2")) )
+    asyncio.ensure_future( readHashFromFile(files=files,
+                                filename=dirPrimary+"/hashdeep/20210321-hashdeep.hash.txt",
+                                )
+                         )
+    asyncio.ensure_future(run_file_compare( dir=dirPrimary , files=files,
+                          qLog=(qToGui,"lb2"), qInfo=(qToGui,"TextInfo1")
+                          ) )
     while not globals.exitFlag:
         try:
             event,values = qFromGui.get_nowait()    # see if something has been posted to Queue
@@ -342,10 +357,9 @@ async def main(files: classFiles, qFromGui: queue, qToGui: queue) -> None:
             if event == "SaveImg":
                 qToGui.put(("lb1",f"Got [SaveImg] event in photodirSync.py"))
 
-    print("The end. main.")
+    print("The end. main().")
 
-
-if __name__ == '__main__':
+def run():
     '''Start PySimpleGui in own thread and then asyncio worker main'''
     qGui = queue.Queue()
     qWorker = queue.Queue()
@@ -360,4 +374,8 @@ if __name__ == '__main__':
     loop.run_until_complete( main(files=files, qFromGui=qWorker, qToGui=qGui) )
     globals.exitFlag=True
 
+    print("The END. run()")
+
+if __name__ == '__main__':
+    run()
     print("The END.  __main__")

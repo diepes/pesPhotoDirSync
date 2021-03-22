@@ -33,7 +33,7 @@ def _dir_scan(dir_name,
               whitelist,
               files: classFiles.classFiles,
               qLog=(None,""),
-              max: int = max,
+              max: int = globals.maxFiles,
               ):
     ''' fast, returns os.DirEntry (20200719 double the speed of _dir_list)
     https://docs.python.org/3/library/os.html#os.DirEntry
@@ -88,19 +88,19 @@ async def readHashFromFile(files: classFiles.classFiles,
                     basepath = row[0].split(":")[1].strip()
                     print(f" basepath from hashdeep {basepath}")
             else:
-                # print(row)
-                # print(row[2])
-                assert len(row[1]) == len("7f44a72ad9a8928ffad9a37c9dcb46c0") , f"Error md5 length wrong ? line={counter}"
-                assert len(row[2]) == len("92126c1ef0ec2183ef72dccdff3b826b0eb41c8546b3b54d46a384b12978dba0") , "Error sha256 length wrong ? line={counter}"
+                # Got file and checksum row. (Not header)
+                assert len(row[1]) == 32, f"Error md5 length wrong ? line={counter}"
+                assert len(row[2]) == 64, f"Error sha256 length wrong ? line={counter}"
                 key=row[1]+"-"+row[2]
                 if key in files.dictHash:
+                    # Found key add duplicate file_name=row[3]
                     files.dictHash[key]["files"].append(row[3])
-                    # print("adding duplicate file name")
                 else:
-                    # Create key Hash, dict with file size, and list of file names
+                    # Create new key Hash, dict with file size, and list of file names
                     files.dictHash[key] = { "size": int(row[0]) , "files": [ row[3] , ] }
                 # print(counter,files["hash"][key])
     print(f"FIND Duplicates: {len( files['hash'] )} ")
+    # Prefered dirs to remove if there are duplicates.
     dirsRemove=[ "/.stversions/", "/backupRsyncDel-", "temp/CameraUploads/", "/CameraUploads/", "/20190000-Info/",
         "/20111030-Quinn-Hedgehog/",
         "/201310050-SydneyHarbour/", "/2013-PaulaNtshonalanga/", "/20110729-BillsBest-Sony/", "/temp/",
@@ -109,6 +109,7 @@ async def readHashFromFile(files: classFiles.classFiles,
         "NoMatch.jpg", "/00000000-Recover-", "/20140203-KarooNasionalePark/" , ".mp4",
         "/Paula-201810-Phone/", "/Pieter-202001-OnePlus6/" , "/20121211-SDR-PowerFailure./" , "/UNSORTED/" , "20070600-Liam-0-5"
         ]
+    # add to dirsRemove prefered e.g /2021/01/ -> /2021/20210101-NewYear/
     for y in range(2003,2020):
         for m in range(1, 13):
             dirsRemove.append(f"/{int(y)}/{int(m):0>2d}/")
@@ -178,21 +179,6 @@ async def readHashFromFile(files: classFiles.classFiles,
     return
 
 
-def DELMEhashMd5Sha256(fname: str):
-    ''' Calc both hashes from one file stream '''
-    # print("+", flush=True, end="")
-    os.environ['PYTHONHASHSEED'] = '0'  # disable salt
-    hash_md5 = hashlib.md5()
-    hash_sha256 = hashlib.sha256()
-    with open(fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-            hash_sha256.update(chunk)
-    fsize=os.stat(fname).st_size
-    # print("-", flush=True, end="")
-    return fsize, hash_md5.hexdigest(), hash_sha256.hexdigest() , fname
-
-
 async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo) -> None:
     print(f"Start ... run_file_compare: dir={dir}")
     t = time.time()
@@ -213,7 +199,6 @@ async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo)
     qLog[0].put((qLog[1],f"run_file_compare:Test hash"))
     hashCount = 0
     hashErr = 0
-    max = 100000
     thash = time.time()
     # We can use a with statement to ensure threads are cleaned up promptly
     # max_workers=5 ( Defaut CPU*4 )

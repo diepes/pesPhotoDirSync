@@ -10,7 +10,6 @@
 '''
 #from . import photoGui
 from . import globals
-from . import classFiles
 
 from dataclasses import dataclass
 #import EXIF
@@ -29,9 +28,101 @@ import concurrent.futures  # ThreadPoolExecutor for hash
 
 
 
+@dataclass
+class classFile:
+    pathbase: str
+    path: str
+    size: int
+    hashmd5: str = ""
+    hashsha256: str = ""
+    flagCalculatedHash: bool = False
+
+class classFiles:
+    ''' Class to keep track of files and hashes '''
+    def __init__(self):
+        from typing import Dict, List
+        self.dictHash : Dict[str, List[classFile] ] = dict()
+        self.dictFile : Dict[str, List[classFile] ] = dict()
+
+    def __len__(self) -> int:
+        return len(self.dictFile)
+
+    def __getitem__(self, key) -> classFile:
+        return self.dictFile.get(key, [])
+
+    def __iter__(self):
+        return iter(self.dictFile)
+
+    def items_file(self):
+        return self.dictFile.items()
+    def items_hash(self):
+        return self.dictHash.items()
+    def item_file(self, key) -> classFile:
+        return self.dictFile[key]
+    def item_hash(self, key) -> classFile:
+        return self.dictHash[key]
+
+    def add(self, file: classFile):
+        assert file.path != "." , "can't use . as path"
+        if file.hashmd5 == "" or file.hashsha256 == "":
+            size = file.size
+            file.getSize, file.getMd5, file.getSha256, getFname = hashMd5Sha256(os.path.join(file.pathbase,file.path))
+            file.flagCalculatedHash = True
+            assert size == file.size, f"Error file size changed for {file.pathbase=} {file.path=} {getFname=}"
+        # print(f"{file.path=} {len(self.dictFile)}")
+        if file.path in self.dictFile.keys():
+            #
+            print(f"Debug: add found dup {file.path}")
+            if all( [(x != file.pathbase) for x in self.dictFile[file.path]['pathbase']]):
+                self.dictFile[file.path].append(file)
+            else:
+                assert False, f"class.files add Duplicate file name added ? {file.pathbase=} {file.path=} "
+        else:
+            #print(f"Debug add {path=}")
+            self.dictFile[file.path] = [ file ]
+
+    def save(self, pathbase: str, fileHashName: str):
+        print(f"Debug save {len(self.dictFile)} docs {pathbase=} to {fileHashName=}")
+        with open(fileHashName, "w") as f:
+            f.write(f"%%%% size,md5,sha256,filename\n")
+            f.write(f"## pathbase = \"{pathbase}\"\n")
+            for pathDocs,fileInstances in self.dictFile.items():
+                for fileInstance in fileInstances:
+                    #print(f"Debug {fileInstance=}  type(fileInstance)={type(fileInstance)}")
+                    if fileInstance.pathbase == pathbase:
+                        print(f"save - entry {fileInstance.pathbase} / {fileInstance.path} ")
+                        f.write(f"{fileInstance.size},{fileInstance.hashmd5},{fileInstance.hashsha256},{fileInstance.path}\n")
+                    else:
+                        print(f"skip - entry {fileInstance.pathbase} / {fileInstance.path} ")
+
+    def load(self, pathbase: str, fileHashName: str) -> int:
+        import csv
+        countNew = 0
+        with open(fileHashName) as csvfile:
+            csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
+            for counter,row in enumerate( csvreader ):
+                if row[0][0] in [ "%", "#"]:
+                    print(', '.join(row))
+                    if "Invoked from:" in row[0]:
+                        basepath = row[0].split(":")[1].strip()
+                        print(f" basepath from hashdeep {basepath}")
+                else:
+                    #  size,md5,sha256,filename
+                    assert not row[3] in self.dictfiles, f"Duplicate file {row[3]=} {counter=}"
+                    self.dictfile[row[3]] = classFile(  pathbase=pathbase,
+                                                        path=row[3],
+                                                        size=row[0],
+                                                        hashmd5=row[1],
+                                                        hashsha256=row[2],
+                                                        flagCalculatedHash=False
+                                                    )
+                    countNew += 1
+        return countNew
+
+
 def _dir_scan(dir_name,
               whitelist,
-              files: classFiles.classFiles,
+              files: classFiles,
               qLog=(None,""),
               max: int = max,
               ):
@@ -53,7 +144,7 @@ def _dir_scan(dir_name,
     #with os.scandir(dir_name) as it:
     for entry in scantree(dir_name):
             if entry.is_file() and os.path.splitext(entry.name)[1][1:] in whitelist:
-                files.add(classFiles.classFile(pathbase=dir_name, path=entry.path, size=entry.stat(follow_symlinks=False).st_size))
+                files.add(classFile(pathbase=dir_name, path=entry.path, size=entry.stat(follow_symlinks=False).st_size))
                 count += 1
                 if qLog[0] and qLog[0].qsize() < 2:
                     qLog[0].put((qLog[1],[ f"_dir_scan: {count=}", ]))
@@ -70,7 +161,7 @@ def _dir_scan(dir_name,
     return files  # classFiles
 
 
-async def readHashFromFile(files: classFiles.classFiles,
+async def readHashFromFile(files: classFiles,
                            filename,
                            ) -> None:
     import csv
@@ -178,7 +269,7 @@ async def readHashFromFile(files: classFiles.classFiles,
     return
 
 
-def DELMEhashMd5Sha256(fname: str):
+def hashMd5Sha256(fname: str):
     ''' Calc both hashes from one file stream '''
     # print("+", flush=True, end="")
     os.environ['PYTHONHASHSEED'] = '0'  # disable salt
@@ -193,7 +284,7 @@ def DELMEhashMd5Sha256(fname: str):
     return fsize, hash_md5.hexdigest(), hash_sha256.hexdigest() , fname
 
 
-async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo) -> None:
+async def run_file_compare( files: classFiles, dir: str, qLog, qInfo) -> None:
     print(f"Start ... run_file_compare: dir={dir}")
     t = time.time()
     qLog[0].put((qLog[1],f"run_file_compare: start..."))
@@ -248,7 +339,7 @@ async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo)
 async def main_run(qFromGui: queue, qToGui: queue) -> None:
     ''' main worker thread uses q's to talk to gui'''
     print("Its main worker.")
-    files = classFiles.classFiles()
+    files = classFiles()
     qToGui.put(("lb1",f"Its main worker. START"))
     dirPrimary = os.path.expanduser("~/Pictures/Photos")
     asyncio.ensure_future( readHashFromFile(files=files,

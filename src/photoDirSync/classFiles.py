@@ -1,12 +1,7 @@
 #!/usr/bin/env python3.8
 '''
-    (c) Pieter Smit 2020 GPL3
-    - Scan two dirs (Photos) , generate file hash for each
-    - Detect corrupt files, and duplicates
-    - Provide cleanup and dir sync two way to preserve Photos
-
-    20200718 Currently only one dir , use hashdeep hash info to find duplicates
-        - run hashdeep
+    (c) Pieter Smit 2021 GPL3
+    Split out the files class.
 '''
 #from . import photoGui
 from . import globals
@@ -21,17 +16,15 @@ import os
 import re
 import time
 import asyncio
-import threading  # run PySimpleGui in own thread, comms through queue
 import queue
 import hashlib
-import concurrent.futures  # ThreadPoolExecutor for hash
-
 
 
 @dataclass
 class classFile:
-    pathbase: str
-    path: str
+    ''' Single file and it's hashes'''
+    pathbase: str  # base dir for all files in one location
+    path: str      # rel path/filename in pathbase dir
     size: int
     hashmd5: str = ""
     hashsha256: str = ""
@@ -41,7 +34,9 @@ class classFiles:
     ''' Class to keep track of files and hashes '''
     def __init__(self):
         from typing import Dict, List
+        # dictHash [md5-sha256] : [ file, ] list
         self.dictHash : Dict[str, List[classFile] ] = dict()
+        # dictFile rel dir/fname: classFile list
         self.dictFile : Dict[str, List[classFile] ] = dict()
 
     def __len__(self) -> int:
@@ -63,23 +58,35 @@ class classFiles:
         return self.dictHash[key]
 
     def add(self, file: classFile):
+        ''' add a new classFile to classFiles, updating the dictFile, and dictHash '''
         assert file.path != "." , "can't use . as path"
         if file.hashmd5 == "" or file.hashsha256 == "":
             size = file.size
-            file.getSize, file.getMd5, file.getSha256, getFname = hashMd5Sha256(os.path.join(file.pathbase,file.path))
+            file.size, file.hashmd5, file.hashsha256, getFname = hashMd5Sha256(os.path.join(file.pathbase,file.path))
             file.flagCalculatedHash = True
             assert size == file.size, f"Error file size changed for {file.pathbase=} {file.path=} {getFname=}"
         # print(f"{file.path=} {len(self.dictFile)}")
+        # file.path is relative dir/fname to file.pathbase
         if file.path in self.dictFile.keys():
             #
             print(f"Debug: add found dup {file.path}")
+            # make sure this is first time we add this file path (dir/fname) in specific pathbase
             if all( [(x != file.pathbase) for x in self.dictFile[file.path]['pathbase']]):
+                # all good add fine is in different pathbase than other files found.
                 self.dictFile[file.path].append(file)
             else:
                 assert False, f"class.files add Duplicate file name added ? {file.pathbase=} {file.path=} "
         else:
             #print(f"Debug add {path=}")
-            self.dictFile[file.path] = [ file ]
+            self.dictFile[file.path] = [ file, ]
+        # Also update the hash dict to find by hash.
+        hashkey=f"{file.hashmd5}-{file.hashsha256}"
+        if hashkey in self.dictHash.keys():
+            print(f"Debug add: {hashkey=} {len(self.dictHash[hashkey])} {self.dictHash[hashkey].keys()}")
+            self.dictHash[hashkey].append(file)
+        else:
+            self.dictHash[hashkey] = [ file, ]
+
 
     def save(self, pathbase: str, fileHashName: str):
         print(f"Debug save {len(self.dictFile)} docs {pathbase=} to {fileHashName=}")
@@ -109,13 +116,14 @@ class classFiles:
                 else:
                     #  size,md5,sha256,filename
                     assert not row[3] in self.dictfiles, f"Duplicate file {row[3]=} {counter=}"
-                    self.dictfile[row[3]] = classFile(  pathbase=pathbase,
-                                                        path=row[3],
-                                                        size=row[0],
-                                                        hashmd5=row[1],
-                                                        hashsha256=row[2],
-                                                        flagCalculatedHash=False
-                                                    )
+                    this.add( classFile(pathbase=pathbase,
+                                        path=row[3],
+                                        size=row[0],
+                                        hashmd5=row[1],
+                                        hashsha256=row[2],
+                                        flagCalculatedHash=False
+                                       )
+                    )
                     countNew += 1
         return countNew
 
@@ -284,83 +292,6 @@ def hashMd5Sha256(fname: str):
     return fsize, hash_md5.hexdigest(), hash_sha256.hexdigest() , fname
 
 
-async def run_file_compare( files: classFiles, dir: str, qLog, qInfo) -> None:
-    print(f"Start ... run_file_compare: dir={dir}")
-    t = time.time()
-    qLog[0].put((qLog[1],f"run_file_compare: start..."))
-    tstart = time.time()
-    _dir_scan(files=files, dir_name=dir,
-              whitelist=["gif", "GIF", "jpg" , "JPG", "jpeg", "png", "PNG", "mp4" ],
-              qLog=qLog , max=100000,
-              )
-    t_dir_scan = time.time() - tstart
-    fLen_dir_scan = len(files)
-    qLog[0].put((qLog[1],f"run_file_compare: found {len(files)} in {dir} in {time.time()-t:.2f}s  {len(files)/(time.time()-t):.2f}"))
-    print(f"run_file_compare: found {len(files)} files in {dir} in {time.time()-t:.2f}s")
-    # print(next(iter(files)))
-    # print(f"t_dir_list={t_dir_list} fLen_dir_list={fLen_dir_list}     t_dir_scan={t_dir_scan} fLen_dir_scan={fLen_dir_scan}")
-    await asyncio.sleep(2)
-    print(f"run_file_compare:Test hash")
-    qLog[0].put((qLog[1],f"run_file_compare:Test hash"))
-    hashCount = 0
-    hashErr = 0
-    max = 100000
-    thash = time.time()
-    # We can use a with statement to ensure threads are cleaned up promptly
-    # max_workers=5 ( Defaut CPU*4 )
-    with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
-        #  use zip to limit number of files for testing
-        future_to_hash = {executor.submit(hashMd5Sha256,os.path.join(f[1][0].pathbase,f[1][0].path)): f for _, f in zip(range(5000), files.items_file())}
-        for future in concurrent.futures.as_completed(future_to_hash):
-            if globals.exitFlag:
-                print(f'run_file_compare break on globals.exitFlag')
-                for ft in future_to_hash:
-                    ft.cancel()
-                print(f'run_file_compare break on globals.exitFlag canceled all')
-                break
-            f = future_to_hash[future]
-            try:
-                hashInfo = future.result()
-            except Exception as exc:
-                print('%r generated an exception: %s' % (f, exc))
-                hashErr += 1
-                qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
-            else:
-                # print('%r page is %d bytes' % (f, len(files)))
-                hashCount += 1
-                if qLog[0] and qLog[0].qsize() < 2:
-                    qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
-                    qLog[0].put( (qLog[1],f"..{hashCount=} time={time.time()-thash:.2f}s {hashInfo=}") )
-
-    qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
-    print("The End. run_file_compare()")
-
-
-async def main_run(qFromGui: queue, qToGui: queue) -> None:
-    ''' main worker thread uses q's to talk to gui'''
-    print("Its main worker.")
-    files = classFiles()
-    qToGui.put(("lb1",f"Its main worker. START"))
-    dirPrimary = os.path.expanduser("~/Pictures/Photos")
-    asyncio.ensure_future( readHashFromFile(files=files,
-                                filename=dirPrimary+"/hashdeep/20210321-hashdeep.hash.txt",
-                                )
-                         )
-    asyncio.ensure_future(run_file_compare( dir=dirPrimary , files=files,
-                          qLog=(qToGui,"lb2"), qInfo=(qToGui,"TextInfo1")
-                          ) )
-    while not globals.exitFlag:
-        try:
-            event,values = qFromGui.get_nowait()    # see if something has been posted to Queue
-        except queue.Empty:                     # get_nowait() will get exception when Queue is empty
-            event = None                      # nothing in queue so do nothing
-            await asyncio.sleep(1)
-        if event:
-            print(f"photoDirSync.py main: qFromGui {event=} {values=} {globals.exitFlag=}")
-            if event == "SaveImg":
-                qToGui.put(("lb1",f"Got [SaveImg] event in photodirSync.py"))
-
-    print("The end. main().")
 
 
 if __name__ == '__main__':

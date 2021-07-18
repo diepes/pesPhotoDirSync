@@ -9,7 +9,11 @@
         - run hashdeep
 '''
 from . import globals
-import PySimpleGUI as sg
+try:
+    import PySimpleGUI as sg
+except ImportError as e:
+    print(f"Err: importing PySimleGUI, try pip install ??. {e}")
+    exit(1)
 import sys
 import time
 import threading  # run PySimpleGui in own thread, comms through queue

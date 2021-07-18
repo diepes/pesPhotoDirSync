@@ -10,11 +10,13 @@
 '''
 try:
     from . import photoGui
-except ImportError:
-    print("Err: probably caused by running from inside /src/ dir.")
+except ImportError as e:
+    print(f"Err: fail import photoGui, probably caused by running from inside /src/ dir. {e}")
+    exit(1)
 except Exception as e:
     #Unknown error , print type.
     print(f"Err:{type(e).__name__} , {e}")
+    exit(1)
     
 
 from . import photoMain

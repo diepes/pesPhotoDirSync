@@ -17,30 +17,32 @@ except Exception as e:
     #Unknown error , print type.
     print(f"Err:{type(e).__name__} , {e}")
     exit(1)
-    
 
 from . import photoMain
 
 from . import globals
 
-from dataclasses import dataclass
+## from dataclasses import dataclass
 #import EXIF
 ##import pyexiv2
 # from PIL import Image, ImageTk
 # import io
-import sys
-import os
-import re
+## import sys
+## import os
+## import re
 import time
 import asyncio
 import threading  # run PySimpleGui in own thread, comms through queue
 import queue
-import hashlib
-import concurrent.futures  # ThreadPoolExecutor for hash
+## import hashlib
+
+## import concurrent.futures  # ThreadPoolExecutor for hash
 
 
 def run():
-    '''Start PySimpleGui in own thread and then asyncio worker main'''
+    ''' Start PySimpleGui in own thread and then asyncio worker 
+        Work done in photoMain thread, and display updates sent through queue to photoGui
+    '''
     qGui = queue.Queue()
     qWorker = queue.Queue()
     # 1/2 Start gui

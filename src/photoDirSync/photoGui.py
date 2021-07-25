@@ -16,7 +16,7 @@ except ImportError as e:
     exit(1)
 import sys
 import time
-import threading  # run PySimpleGui in own thread, comms through queue
+#import threading  # run PySimpleGui in own thread, comms through queue
 import queue
 debug = 0
 

@@ -6,7 +6,6 @@
 #from . import photoGui
 from . import globals
 
-from dataclasses import dataclass
 #import EXIF
 ##import pyexiv2
 # from PIL import Image, ImageTk
@@ -20,7 +19,8 @@ import queue
 import hashlib
 
 
-@dataclass
+from dataclasses import dataclass, field
+@dataclass  # creates boilerplate for class to __init__
 class classFile:
     ''' Single file and it's hashes'''
     pathbase: str  # base dir for all files in one location
@@ -35,9 +35,11 @@ class classFiles:
     def __init__(self):
         from typing import Dict, List
         # dictHash [md5-sha256] : [ file, ] list
-        self.dictHash : Dict[str, List[classFile] ] = dict()
+        self.dictHashFiles : Dict[string, List[classFile]] = dict()
+        self.dictHashSize  : Dict[string, int]  = dict()
         # dictFile rel dir/fname: classFile list
         self.dictFile : Dict[str, List[classFile] ] = dict()
+        # counters
 
     def __len__(self) -> int:
         return len(self.dictFile)
@@ -51,41 +53,57 @@ class classFiles:
     def items_file(self):
         return self.dictFile.items()
     def items_hash(self):
-        return self.dictHash.items()
+        return self.dictHashFiles.items()
     def item_file(self, key) -> classFile:
         return self.dictFile[key]
     def item_hash(self, key) -> classFile:
-        return self.dictHash[key]
+        return self.dictHashFiles[key]
 
-    def add(self, file: classFile):
+    def getHashFileSize(self, hash: str) -> int:
+        return self.dictHashSize[hash]
+
+    def getNumDuplicateFiles(self) -> int:
+        count = 0
+        for k,v in self.dictHashFiles.items():
+            count += len(v)-1
+        return count       
+
+    def add(self, fileInfo: classFile):
         ''' add a new classFile to classFiles, updating the dictFile, and dictHash '''
-        assert file.path != "." , "can't use . as path"
-        if file.hashmd5 == "" or file.hashsha256 == "":
-            size = file.size
-            file.size, file.hashmd5, file.hashsha256, getFname = hashMd5Sha256(os.path.join(file.pathbase,file.path))
-            file.flagCalculatedHash = True
-            assert size == file.size, f"Error file size changed for {file.pathbase=} {file.path=} {getFname=}"
-        # print(f"{file.path=} {len(self.dictFile)}")
-        # file.path is relative dir/fname to file.pathbase
-        if file.path in self.dictFile.keys():
+        assert fileInfo.path != "." , "can't use . as path"
+        if fileInfo.hashmd5 == "" or fileInfo.hashsha256 == "":
+            size = fileInfo.size  #Save size passed in before fs lookup.
+            fileInfo.size, fileInfo.hashmd5, fileInfo.hashsha256, getFname = hashMd5Sha256(os.path.join(fileInfo.pathbase,fileInfo.path))
+            fileInfo.flagCalculatedHash = True
+            assert size == fileInfo.size, f"Error file size changed for {fileInfo.pathbase=} {fileInfo.path=} {getFname=}"
+        else:
+            fileInfo.flagCalculatedHash = False  # We did not calc hash from FS yet.
+        # print(f"{fileInfo.path=} {len(self.dictFile)}")
+        # fileInfo.path is relative dir/fname to fileInfo.pathbase
+        if fileInfo.path in self.dictFile.keys():
             #
-            print(f"Debug: add found dup {file.path}")
-            # make sure this is first time we add this file path (dir/fname) in specific pathbase
-            if all( [(x != file.pathbase) for x in self.dictFile[file.path]['pathbase']]):
-                # all good add fine is in different pathbase than other files found.
-                self.dictFile[file.path].append(file)
+            print(f"Debug: add found dup {fileInfo.path}")
+            # make sure this is first time we add this fileInfo path (dir/fname) in specific pathbase
+            if all( [(x != fileInfo.pathbase) for x in self.dictFile[fileInfo.path]['pathbase']]):
+                # all good add file is in different pathbase than other fileInfos found.
+                self.dictFile[fileInfo.path].append(fileInfo)
             else:
-                assert False, f"class.files add Duplicate file name added ? {file.pathbase=} {file.path=} "
+                assert False, f"class.files add Duplicate file name added ? {fileInfo.pathbase=} {fileInfo.path=} "
         else:
             #print(f"Debug add {path=}")
-            self.dictFile[file.path] = [ file, ]
+            self.dictFile[fileInfo.path] = [ fileInfo, ]
         # Also update the hash dict to find by hash.
-        hashkey=f"{file.hashmd5}-{file.hashsha256}"
-        if hashkey in self.dictHash.keys():
-            print(f"Debug add: {hashkey=} {len(self.dictHash[hashkey])} {self.dictHash[hashkey].keys()}")
-            self.dictHash[hashkey].append(file)
+        # - calc hashkey from md5-sha256
+        assert len(fileInfo.hashmd5) == 32, f"Error md5 length wrong ? {fileInfo.path=}"
+        assert len(fileInfo.hashsha256) == 64, f"Error sha256 length wrong ? {fileInfo.path=}"
+        hashkey=f"{fileInfo.hashmd5}-{fileInfo.hashsha256}"
+        if hashkey in self.dictHashSize.keys():
+            #print(f"Debug add: {hashkey=} {len(self.dictHash[hashkey])} {self.dictHash[hashkey].keys()}")
+            self.dictHashFiles[hashkey].append(fileInfo)
+            #assert size == self.dictHashSize[hashkey], f"Existing file not matching size, but same hash ?? {fileInfo.path=}"
         else:
-            self.dictHash[hashkey] = [ file, ]
+            self.dictHashFiles[hashkey] = [ fileInfo, ]
+            self.dictHashSize[hashkey]  = fileInfo.size
 
 
     def save(self, pathbase: str, fileHashName: str):
@@ -193,11 +211,13 @@ async def readHashFromFile(files: classFiles,
                 assert len(row[2]) == len("92126c1ef0ec2183ef72dccdff3b826b0eb41c8546b3b54d46a384b12978dba0") , "Error sha256 length wrong ? line={counter}"
                 key=row[1]+"-"+row[2]
                 if key in files.dictHash:
-                    files.dictHash[key]["files"].append(row[3])
+                    files.dictHashFiles[key].append(row[3])
                     # print("adding duplicate file name")
+                    assert int(row[0]) == files.dictHashSize[key], f"Loaded file with same hash, missmatch size {row[3]}"
                 else:
                     # Create key Hash, dict with file size, and list of file names
-                    files.dictHash[key] = { "size": int(row[0]) , "files": [ row[3] , ] }
+                    files.dictHashSize[key] = int(row[0]) 
+                    files.dictHashFiles[key] = [ row[3] , ] 
                 # print(counter,files["hash"][key])
     print(f"FIND Duplicates: {len( files['hash'] )} ")
     dirsRemove=[ "/.stversions/", "/backupRsyncDel-", "temp/CameraUploads/", "/CameraUploads/", "/20190000-Info/",

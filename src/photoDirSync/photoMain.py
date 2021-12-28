@@ -141,7 +141,8 @@ async def readHashFromFile(files: classFiles.classFiles,
         "/20161027-Natalie+Evan@CA/", "/20150300-DogsHomeAlone/", "/200880113-Paula-SunFlowerPuzzle/",
         "/Screenshots/", "/200903-Study/", "/Note3-DCIM/", "/20180600-Station/",
         "NoMatch.jpg", "/00000000-Recover-", "/20140203-KarooNasionalePark/" , ".mp4",
-        "/Paula-201810-Phone/", "/Pieter-202001-OnePlus6/" , "/20121211-SDR-PowerFailure./" , "/UNSORTED/" , "20070600-Liam-0-5"
+        "/Paula-201810-Phone/", "/Pieter-202001-OnePlus6/" , "/20121211-SDR-PowerFailure./" , "/UNSORTED/" , "20070600-Liam-0-5",
+        "/Photos/2014/20140914-SDR-WashPoolCover/", "/Photos/2014/20140300-Paula/", "/Photos/2014/20140400-Dogs/", "/CameraUploads/",
         ]
     # add to dirsRemove prefered e.g /2021/01/ -> /2021/20210101-NewYear/
     for y in range(2003,2020):

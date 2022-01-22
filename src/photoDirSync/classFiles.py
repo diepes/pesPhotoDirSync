@@ -35,9 +35,11 @@ class classFiles:
     def __init__(self):
         from typing import Dict, List
         # dictHash [md5-sha256] : [ file, ] list
-        self.dictHashFiles : Dict[string, List[classFile]] = dict()
-        self.dictHashSize  : Dict[string, int]  = dict()
-        # dictFile rel dir/fname: classFile list
+        # { hash: list(classFile)}  all files for specific hash
+        self.dictHashFiles : Dict[str, List[classFile]] = dict()
+        # { hash: size }  
+        self.dictHashSize  : Dict[str, int]  = dict()
+        # dictFile { rel-dir/fname: list(classFile) } #Can have more than one file, in different root-dir's
         self.dictFile : Dict[str, List[classFile] ] = dict()
         # counters
 

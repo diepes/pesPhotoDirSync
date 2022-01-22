@@ -12,7 +12,7 @@ from . import globals
 try:
     import PySimpleGUI as sg
 except ImportError as e:
-    print(f"Err: importing PySimleGUI, try pip install ??. {e}")
+    print(f"Err: importing PySimleGUI, try pip install ??. {e=}")
     exit(1)
 import sys
 import time

@@ -29,14 +29,13 @@ import concurrent.futures  # ThreadPoolExecutor for hash
 
 
 
-async def main_run(qFromGui: queue, qToGui: queue) -> None:
+async def main_run(qFromGui: queue, qToGui: queue, files: classFiles) -> None:
     ''' main worker thread uses q's to talk to gui'''
     print("Its main worker.")
-    files = classFiles.classFiles()  # Keeps photo file info, and hash etc.
     qToGui.put(("lb1",f"Its main worker. START"))
     dirPrimary = os.path.expanduser("~/Pictures/Photos")
     asyncio.ensure_future( readHashFromFile(files=files,
-                                filename=dirPrimary+"/hashdeep/20210725-hashdeep.hash.txt",
+                                filename=dirPrimary+"/hashdeep/20211229-hashdeep.hash.txt",
                                 #20210321-hashdeep.hash.txt",
                                 )
                          )
@@ -207,10 +206,16 @@ async def readHashFromFile(files: classFiles.classFiles,
 
     print(f" basepath={basepath} , countStillDuplicate={countStillDuplicate}")
     fdel=0
+    fdel_missing=0
     for f in falldel:
-        os.remove(f"{basepath}/{f}")
-        fdel += 1
-    print(f"Deleted {fdel} done. ")
+        fname = f"{basepath}/{f}"
+        if os.path.isfile(fname):
+            os.remove(fname)
+            fdel += 1
+        else:
+            print(f"Error - delfile missing {fname=} {type(f)=}")
+            fdel_missing += 1
+    print(f"Deleted {fdel}, missing {fdel_missing} done. ")
     return
 
 

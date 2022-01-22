@@ -15,29 +15,28 @@ except ImportError as e:
     exit(1)
 except Exception as e:
     #Unknown error , print type.
-    print(f"Err:{type(e).__name__} , {e}")
+    print(f"Err[photoDirSync.py]:{type(e).__name__} , {e}")
     exit(1)
 
 from . import photoMain
-
 from . import globals
+from . import classFiles
 
-## from dataclasses import dataclass
-#import EXIF
-##import pyexiv2
-# from PIL import Image, ImageTk
-# import io
-## import sys
-## import os
-## import re
 import time
 import asyncio
 import threading  # run PySimpleGui in own thread, comms through queue
 import queue
-## import hashlib
 
-## import concurrent.futures  # ThreadPoolExecutor for hash
+def start_photoGui_thread(qGui, qWorker):
+    # 1/2 Start gui (thread)
+    thread_id_gui = threading.Thread(target=photoGui.gui_run, args=(qGui,qWorker,), daemon=True)
+    thread_id_gui.start()
 
+def run_main_worker_until_done(qGui, qWorker, files):
+    # 2/2 Start main worker (asyncio)
+    loop = asyncio.get_event_loop()
+    loop.set_debug(True)  # disable for production
+    loop.run_until_complete( photoMain.main_run(qFromGui=qWorker, qToGui=qGui, files=files) )
 
 def run():
     ''' Start PySimpleGui in own thread and then asyncio worker 
@@ -45,14 +44,11 @@ def run():
     '''
     qGui = queue.Queue()
     qWorker = queue.Queue()
-    # 1/2 Start gui
-    thread_id_gui = threading.Thread(target=photoGui.gui_run, args=(qGui,qWorker,), daemon=True)
-    thread_id_gui.start()
+    start_photoGui_thread(qGui=qGui, qWorker=qWorker)
 
-    # 2/2 Start main worker
-    loop = asyncio.get_event_loop()
-    loop.set_debug(True)  # disable for production
-    loop.run_until_complete( photoMain.main_run(qFromGui=qWorker, qToGui=qGui) )
+    files = classFiles.classFiles()  # Keeps photo file info, and hash etc.
+    run_main_worker_until_done(qGui, qWorker, files)
+
     globals.exitFlag=True
 
     print("The END. run()")

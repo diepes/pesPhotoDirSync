@@ -29,6 +29,7 @@ class classFile:
     hashmd5: str = ""
     hashsha256: str = ""
     flagCalculatedHash: bool = False
+    source: str = "" # optional e.g. hashdeep csv
 
 class classFiles:
     ''' Class to keep track of files and hashes '''
@@ -73,6 +74,10 @@ class classFiles:
     def add(self, fileInfo: classFile):
         ''' add a new classFile to classFiles, updating the dictFile, and dictHash '''
         assert fileInfo.path != "." , "can't use . as path"
+        filename = os.path.join(fileInfo.pathbase,fileInfo.path)
+        if not os.path.exists(filename):
+            print(f"Debug: classFiles.add({fileInfo.source=}) non-existent file {filename}")
+            raise FileNotFoundError(f"classFiles.add missing file {filename=} {fileInfo.source=}")
         if fileInfo.hashmd5 == "" or fileInfo.hashsha256 == "":
             size = fileInfo.size  #Save size passed in before fs lookup.
             fileInfo.size, fileInfo.hashmd5, fileInfo.hashsha256, getFname = hashMd5Sha256(os.path.join(fileInfo.pathbase,fileInfo.path))

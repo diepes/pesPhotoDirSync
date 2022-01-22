@@ -28,16 +28,25 @@ from . import worker_readHashFromFile
 from .. import classFiles, globals
 from . import worker_run_file_compare 
 
-async def worker_run(qFromGui: queue, qToGui: queue, files: classFiles) -> None:
-    ''' main worker thread uses q's to talk to gui'''
-    print("Its main worker.")
-    qToGui.put(("lb1",f"Its main worker. START"))
-    dirPrimary = os.path.expanduser("~/Pictures/Photos")
-    asyncio.ensure_future( worker_readHashFromFile.readHashFromFile(files=files,
-                                filename=dirPrimary+"/hashdeep/20211229-hashdeep.hash.txt",
+async def readHashdeepIntoFiles(files, filename, qToGui, qLabel="lb1"):
+    fn_hashdeep = filename
+    t_hashdeep = time.time()
+    counters = await worker_readHashFromFile.readHashFromFile(
+                                files=files,
+                                filename=fn_hashdeep,
                                 #20210321-hashdeep.hash.txt",
                                 )
-                         )
+    qToGui.put((qLabel,f"hashdeep: read csv from {fn_hashdeep} in {time.time()-t_hashdeep:.1f}s ... "))
+    qToGui.put((qLabel,f"hashdeep: {counters=}"))
+
+async def worker_run(qFromGui: queue, qToGui: queue, files: classFiles) -> None:
+    ''' main worker thread uses q's to talk to gui'''
+    print("Its photoWorker.worker_main.worker_run().")
+    qToGui.put(("lb1",f"Its main worker. START"))
+    dirPrimary = os.path.expanduser("~/Pictures/Photos")
+
+    await readHashdeepIntoFiles(files=files, filename=dirPrimary+"/hashdeep/20211229-hashdeep.hash.txt", qToGui=qToGui, qLabel="lb1")
+
     asyncio.ensure_future(worker_run_file_compare.run_file_compare( dir=dirPrimary, files=files,
                                             qLog=(qToGui,"lb2"),
                                             qInfo=(qToGui,"TextInfo1"),

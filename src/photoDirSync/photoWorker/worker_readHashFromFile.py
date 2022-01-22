@@ -29,13 +29,19 @@ from .. import classFiles, globals
 
 async def readHashFromFile(files: classFiles.classFiles,
                            filename,
-                           ) -> None:
+                           ) -> dict:
     import csv
     global exitFlag
     if not os.path.exists(filename):
-        print(f"Debug: readHashFromFile missing file {filename}")
+        print(f"Debug: readHashFromFile missing csv file {filename}")
         exitFlag = True
         exit(1)
+    c = dict() #Counters
+    c['clean']=0
+    c['del']=0
+    c['ZeroSize']=0
+    c['stillDup']=0
+    c['hashdeepNoFile'] = 0
     with open(filename) as csvfile:
         csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
         for counter,row in enumerate( csvreader ):
@@ -45,20 +51,24 @@ async def readHashFromFile(files: classFiles.classFiles,
                     basepath = row[0].split(":")[1].strip()
                     print(f"Debug: basepath from hashdeep: {basepath}")
             else:
-                # Got file and checksum row. (Not header)
+                # Got file entry and checksum row. (Not header)
                 assert len(row[1]) == 32, f"Error md5 length wrong ? line={counter}"
                 assert len(row[2]) == 64, f"Error sha256 length wrong ? line={counter}"
                 # key=row[1]+"-"+row[2]
-                files.add(fileInfo=classFiles.classFile(pathbase=basepath, path=row[3], size=int(row[0]), hashmd5=row[1], hashsha256=row[2]))
-                # if key in files.dictHashFiles:
-                #     # Found key add duplicate file_name=row[3]
-                #     files.dictHashFiles[key].append(row[3])
-                #     assert int(row[0]) == files.dictHashSize[key], f" load file {row[3]} with match hash, but different size ???"
-                # else:
-                #     # Create new key Hash, dict with file size, and list of file names
-                #     files.dictHashFiles[key] = [ row[3] , ]
-                #     files.dictHashSize[key] = int(row[0])
-                # # print(counter,files["hash"][key])
+                try:
+                    files.add(
+                        fileInfo=
+                            classFiles.classFile(
+                            pathbase=basepath,
+                            path=row[3],
+                            size=int(row[0]),
+                            hashmd5=row[1],
+                            hashsha256=row[2],
+                            source=f"hashdeep@{filename}@line#{counter+1}",
+                        )
+                    )
+                except FileNotFoundError:
+                   c['hashdeepNoFile'] += 1 
     print(f"FIND Duplicates: {files.getNumDuplicateFiles()} ")
     # Set list of Prefered dirs to remove if there are duplicates.
     dirsRemove=[ "/.stversions/", "/backupRsyncDel-", "temp/CameraUploads/", "/CameraUploads/", "/20190000-Info/",
@@ -75,16 +85,11 @@ async def readHashFromFile(files: classFiles.classFiles,
         for m in range(1, 13):
             dirsRemove.append(f"/{int(y)}/{int(m):0>2d}/")
             # print(f"/{int(y)}/{int(m):0>2d}/")
-
-    countclean=0
-    countdel=0
-    countZeroSize=0
-    countStillDuplicate=0
     falldel = []
     for key,fl in files.items_hash():  # loop through file hash's  v=list(fileObj)
         if len( fl ) > 1:
             if files.getHashFileSize(key) == 0:
-                countZeroSize =+ len(fl)
+                c['ZeroSize'] =+ len(fl)
                 falldel.extend( fl )
                 continue
             #  Duplicate hash
@@ -96,7 +101,7 @@ async def readHashFromFile(files: classFiles.classFiles,
                 for match in dirsRemove:
                     if match in f:
                         fdel.append(f)
-                        countdel += 1
+                        c['del'] += 1
                         matchHistory.append(match)
                         break
                 else:
@@ -104,7 +109,7 @@ async def readHashFromFile(files: classFiles.classFiles,
                     if len(fkeep) == 1:
                         if os.path.dirname(f) == os.path.dirname(fkeep[0]):
                             fdel.append(f)
-                            countdel += 1
+                            c['del'] += 1
                             print(f" Del {f} in same path as matching {fkeep[0]}")
                         else:
                             fkeep.append(f)
@@ -112,40 +117,40 @@ async def readHashFromFile(files: classFiles.classFiles,
                         fkeep.append(f)
             if len(fkeep) == 0:  # Keep one.
                 fkeep.append(fdel.pop(0))
-                countdel -= 1
+                c['del'] -= 1
                 # print(f" Keeping one copy, all were to be removed fkeep={fkeep}   fdel={', '.join(fdel)}  matchHistory={', '.join(matchHistory)}")
             assert (len(fkeep)+len(fdel)) == len( fl ) ,  "BUG lost a file ??"
-            assert (len(fkeep) > 0) , f"Deleting all files ? fdel={fdel}"
+            assert (len(fkeep) > 0) , f"Deleting all files ? {fdel=}"
             if len(fkeep) == 1:
-                countclean +=1
+                c['clean'] +=1
                 falldel.extend(fdel)
             else:
                 print(f" Duplicate: fkeep={', '.join(fkeep)}")
                 print(f"            fdel={', '.join(fdel)}")
-                countStillDuplicate =+1
+                c['stillDup'] =+1
 
             #  Done filtering multiple files for single hash
             #print(f"         fkeep={', '.join(fkeep)}  <<<<  fdel={', '.join(fdel)}")
 
-    print(f"done. del={countdel} countclean={countclean} dup cleaned, found {countZeroSize} with zero size")
-    eq = "=" if ( len(falldel) == (countdel + countZeroSize) ) else "!="
-    print(f" falldel:{len(falldel)} {eq} {countdel} + {countZeroSize} = {countdel + countZeroSize}")
+    print(f"done. {c['del']=} {c['clean']=} dup cleaned, found {c['ZeroSize']=} with zero size")
+    eq = "=" if ( len(falldel) == (c['del'] + c['ZeroSize']) ) else "!="
+    print(f" falldel:{len(falldel)} {eq} {c['del']} + {c['ZeroSize']} = {c['del'] + c['ZeroSize']}")
 
-    print(f" basepath={basepath} , countStillDuplicate={countStillDuplicate}")
-    fdel=0
-    fdel_missing=0
+    print(f" basepath={basepath} , {c['stillDup']=}")
+    c['fdel']=0
+    c['fdel_missing']=0
     for f in falldel:
         fname = f"{basepath}/{f}"
         if os.path.isfile(fname):
             os.remove(fname)
-            fdel += 1
+            c['fdel'] += 1
         else:
             print(f"Error - delfile missing {fname=} {type(f)=}")
-            fdel_missing += 1
-    print(f"Deleted {fdel}, missing {fdel_missing} done. ")
-    return
+            c['fdel_missing'] += 1
+    print(f"Deleted {c['fdel']}, missing {c['fdel_missing']} done. ")
+    return c
 
 
 if __name__ == '__main__':
-    print("ERR photoMain.py is only a module of import") 
+    print(f"ERR {__name__} is only a module of import") 
     print("The END.  __main__")

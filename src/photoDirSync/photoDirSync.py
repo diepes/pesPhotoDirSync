@@ -18,7 +18,7 @@ except Exception as e:
     print(f"Err[photoDirSync.py]:{type(e).__name__} , {e}")
     exit(1)
 
-from . import photoMain
+from . import photoWorker
 from . import globals
 from . import classFiles
 
@@ -36,7 +36,7 @@ def run_main_worker_until_done(qGui, qWorker, files):
     # 2/2 Start main worker (asyncio)
     loop = asyncio.get_event_loop()
     loop.set_debug(True)  # disable for production
-    loop.run_until_complete( photoMain.main_run(qFromGui=qWorker, qToGui=qGui, files=files) )
+    loop.run_until_complete( photoWorker.worker_run(qFromGui=qWorker, qToGui=qGui, files=files) )
 
 def run():
     ''' Start PySimpleGui in own thread and then asyncio worker 

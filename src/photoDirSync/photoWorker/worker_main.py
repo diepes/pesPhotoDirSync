@@ -24,6 +24,7 @@ import time
 from dataclasses import dataclass
 
 from . import worker_readHashFromFile
+from . import worker_selectDuplicatePrimary
 #from . import photoGui
 from .. import classFiles, globals
 from . import worker_run_file_compare 
@@ -31,12 +32,20 @@ from . import worker_run_file_compare
 async def readHashdeepIntoFiles(files, filename, qToGui, qLabel="lb1"):
     fn_hashdeep = filename
     t_hashdeep = time.time()
-    counters = await worker_readHashFromFile.readHashFromFile(
+    counters = dict()
+    await worker_readHashFromFile.readHashFromFile(
                                 files=files,
                                 filename=fn_hashdeep,
+                                c=counters,
                                 #20210321-hashdeep.hash.txt",
                                 )
-    qToGui.put((qLabel,f"hashdeep: read csv from {fn_hashdeep} in {time.time()-t_hashdeep:.1f}s ... "))
+    qToGui.put((qLabel,f"hashdeep: from csv {fn_hashdeep} in {time.time()-t_hashdeep:.1f}s found {files.getNumDuplicateFiles()} duplicates ... "))
+    print(f"worker_main: Duplicates in files: {files.getNumDuplicateFiles()} ")
+
+    await worker_selectDuplicatePrimary.select_duplicate_primary(
+        files=files,
+        c=counters,
+    )
     qToGui.put((qLabel,f"hashdeep: {counters=}"))
 
 async def worker_run(qFromGui: queue, qToGui: queue, files: classFiles) -> None:

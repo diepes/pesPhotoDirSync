@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.8
 '''
     (c) Pieter Smit 2020 GPL3
     - Scan two dirs (Photos) , generate file hash for each
@@ -7,6 +6,11 @@
 
     20200718 Currently only one dir , use hashdeep hash info to find duplicates
         - run hashdeep
+
+    This module:
+      1. Setup queue's msgQueue for front ack com's
+      2. Start gui (in own thread)
+      3. photoWorker
 '''
 try:
     from . import photoGui
@@ -25,7 +29,7 @@ from . import classFiles
 import time
 import asyncio
 import threading  # run PySimpleGui in own thread, comms through queue
-import queue
+from . import msgQueue
 
 def start_photoGui_thread(qGui, qWorker):
     # 1/2 Start gui (thread)
@@ -42,8 +46,8 @@ def run():
     ''' Start PySimpleGui in own thread and then asyncio worker 
         Work done in photoMain thread, and display updates sent through queue to photoGui
     '''
-    qGui = queue.Queue()
-    qWorker = queue.Queue()
+    qGui = msgQueue.Q(name="qGui")
+    qWorker = msgQueue.Q(name="qWorker")
     start_photoGui_thread(qGui=qGui, qWorker=qWorker)
 
     files = classFiles.classFiles()  # Keeps photo file info, and hash etc.

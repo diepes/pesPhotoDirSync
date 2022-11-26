@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.8
 '''
     (c) Pieter Smit 2021 GPL3
     Split out the files class.
@@ -143,7 +142,7 @@ class classFiles:
                 else:
                     #  size,md5,sha256,filename
                     assert not row[3] in self.dictfiles, f"Duplicate file {row[3]=} {counter=}"
-                    this.add( classFile(pathbase=pathbase,
+                    self.add( classFile(pathbase=pathbase,
                                         path=row[3],
                                         size=row[0],
                                         hashmd5=row[1],

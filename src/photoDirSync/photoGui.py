@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.8
 '''
     (c) Pieter Smit 2020 GPL3
     - Scan two dirs (Photos) , generate file hash for each
@@ -27,14 +26,14 @@ def gui_run(qFromWorker,qToWorker):
         listboxContent = { "lb1":[], "lb2":[] }
         event, values = window.read(timeout=10)
         window.Element('lb1').Update(["lb1"])
-        window.FindElement('lb2').Update(values=["lb2"])
+        window['lb2'].Update(values=["lb2"])
         while True:
             event, values = window.read(timeout=100)  # wait for up to 100 ms for a GUI event
             if event != "__TIMEOUT__":
                 print(f"gui_run: {event=} {values=}")
             if event == sg.WIN_CLOSED or event == 'Exit' or globals.exitFlag == True:
                 globals.exitFlag=True
-                qToWorker.put( ("gui_state","Gui Quitting."))
+                qToWorker.put("gui_state","Gui Quitting.")
                 break
             elif event == 'Show':
                 # Update the "output" text element to be the value of "input" element
@@ -44,7 +43,7 @@ def gui_run(qFromWorker,qToWorker):
                 # A shortened version of this update can be written without the ".Update"
                 # window['-OUTPUT-'](values['-IN-'])
             elif event != "__TIMEOUT__":
-                qToWorker.put( (event,values) )
+                qToWorker.put( event,values )
             # --------------- Read next message coming in from threads ---------------
             try:
                 qevent,qvalue = qFromWorker.get_nowait()    # see if something has been posted to Queue

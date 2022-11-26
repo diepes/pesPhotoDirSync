@@ -1,2 +1,2 @@
-from . import photoDirSync
+from . import main
 

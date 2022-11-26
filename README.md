@@ -1,6 +1,7 @@
 # pesPhotoDirSync
-2020-07 v 0.0.1  gui broken
+2022-11 v 0.0.3 split out msgQueue.py
 2021-12 v 0.0.2 sudo apt-get install python3-tk
+2020-07 v 0.0.1  gui broken
 ## uses python venv
 ### Created with
  * apt-get install python3-venv
@@ -8,6 +9,7 @@
 
 ### Activate with 
 source venv/bin/activate
+./run.py
 
 ### Hashdeep file checksum's
  - generate file hashes with ```~/Pictures/Photos/hashdeep/go-do-hashdeep.sh```

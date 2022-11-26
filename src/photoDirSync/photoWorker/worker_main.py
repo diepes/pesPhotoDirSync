@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.8
 '''
     (c) Pieter Smit 2020 GPL3
     - Scan two dirs (Photos) , generate file hash for each
@@ -9,17 +8,8 @@
         - run hashdeep
 '''
 import asyncio
-import concurrent.futures  # ThreadPoolExecutor for hash
-import hashlib
 import os
-#import threading  # run PySimpleGui in own thread, comms through queue
 import queue
-import re
-#import EXIF
-##import pyexiv2
-# from PIL import Image, ImageTk
-# import io
-import sys
 import time
 from dataclasses import dataclass
 
@@ -39,19 +29,19 @@ async def readHashdeepIntoFiles(files, filename, qToGui, qLabel="lb1"):
                                 c=counters,
                                 #20210321-hashdeep.hash.txt",
                                 )
-    qToGui.put((qLabel,f"hashdeep: from csv {fn_hashdeep} in {time.time()-t_hashdeep:.1f}s found {files.getNumDuplicateFiles()} duplicates ... "))
+    qToGui.put(qLabel,f"hashdeep: from csv {fn_hashdeep} in {time.time()-t_hashdeep:.1f}s found {files.getNumDuplicateFiles()} duplicates ... ")
     print(f"worker_main: Duplicates in files: {files.getNumDuplicateFiles()} ")
 
     await worker_selectDuplicatePrimary.select_duplicate_primary(
         files=files,
         c=counters,
     )
-    qToGui.put((qLabel,f"hashdeep: {counters=}"))
+    qToGui.put(qLabel,f"hashdeep: {counters=}")
 
 async def worker_run(qFromGui: queue, qToGui: queue, files: classFiles) -> None:
     ''' main worker thread uses q's to talk to gui'''
     print("Its photoWorker.worker_main.worker_run().")
-    qToGui.put(("lb1",f"Its main worker. START"))
+    qToGui.put("lb1",f"Its main worker. START")
     dirPrimary = os.path.expanduser("~/Pictures/Photos")
 
     await readHashdeepIntoFiles(files=files, filename=dirPrimary+"/hashdeep/20211229-hashdeep.hash.txt", qToGui=qToGui, qLabel="lb1")
@@ -70,7 +60,7 @@ async def worker_run(qFromGui: queue, qToGui: queue, files: classFiles) -> None:
         if event:
             print(f"photoDirSync.py main: qFromGui {event=} {values=} {globals.exitFlag=}")
             if event == "SaveImg":
-                qToGui.put(("lb1",f"Got [SaveImg] event in photoMain.py form qFromGui "))
+                qToGui.put("lb1",f"Got [SaveImg] event in photoMain.py form qFromGui ")
 
     print("The end. main().")
 

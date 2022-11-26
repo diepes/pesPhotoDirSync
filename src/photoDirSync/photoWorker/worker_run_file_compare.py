@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.8
 '''
     (c) Pieter Smit 2020 GPL3
     - Scan two dirs (Photos) , generate file hash for each
@@ -30,7 +29,7 @@ from .. import classFiles, globals
 async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo) -> None:
     print(f"Start ... run_file_compare: dir={dir}")
     t = time.time()
-    qLog[0].put((qLog[1],f"run_file_compare: start..."))
+    qLog[0].put(qLog[1],f"run_file_compare: start...")
     tstart = time.time()
     _dir_scan(files=files, dir_name=dir,
               whitelist=["gif", "GIF", "jpg" , "JPG", "jpeg", "png", "PNG", "mp4" ],
@@ -38,13 +37,13 @@ async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo)
               )
     t_dir_scan = time.time() - tstart
     fLen_dir_scan = len(files)
-    qLog[0].put((qLog[1],f"run_file_compare: found {len(files)} in {dir} in {time.time()-t:.2f}s  {len(files)/(time.time()-t):.2f}"))
+    qLog[0].put(qLog[1],f"run_file_compare: found {len(files)} in {dir} in {time.time()-t:.2f}s  {len(files)/(time.time()-t):.2f}")
     print(f"run_file_compare: found {len(files)} files in {dir} in {time.time()-t:.2f}s")
     # print(next(iter(files)))
     # print(f"t_dir_list={t_dir_list} fLen_dir_list={fLen_dir_list}     t_dir_scan={t_dir_scan} fLen_dir_scan={fLen_dir_scan}")
     await asyncio.sleep(2)
     print(f"run_file_compare:Test hash")
-    qLog[0].put((qLog[1],f"run_file_compare:Test hash"))
+    qLog[0].put(qLog[1],f"run_file_compare:Test hash")
     hashCount = 0
     hashErr = 0
     thash = time.time()
@@ -66,15 +65,15 @@ async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo)
             except Exception as exc:
                 print('%r generated an exception: %s' % (f, exc))
                 hashErr += 1
-                qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
+                qInfo[0].put(qInfo[1],f"{hashCount=} {hashErr=}")
             else:
                 # print('%r page is %d bytes' % (f, len(files)))
                 hashCount += 1
                 if qLog[0] and qLog[0].qsize() < 2:
-                    qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
-                    qLog[0].put( (qLog[1],f"..{hashCount=} time={time.time()-thash:.2f}s {hashInfo=}") )
+                    qInfo[0].put(qInfo[1],f"{hashCount=} {hashErr=}")
+                    qLog[0].put( qLog[1],f"..{hashCount=} time={time.time()-thash:.2f}s {hashInfo=}")
 
-    qInfo[0].put((qInfo[1],f"{hashCount=} {hashErr=}"))
+    qInfo[0].put(qInfo[1],f"{hashCount=} {hashErr=}")
     print("The End. run_file_compare()")
 
 
@@ -98,24 +97,24 @@ def _dir_scan(dir_name,
     count=0
     t=time.time()
     if qLog[0]:
-        qLog[0].put((qLog[1],f"{count=} dir_scan dir_name={dir_name}"))
+        qLog[0].put(qLog[1],f"{count=} dir_scan dir_name={dir_name}")
     #with os.scandir(dir_name) as it:
     for entry in scantree(dir_name):
             if entry.is_file() and os.path.splitext(entry.name)[1][1:] in whitelist:
                 files.add(classFiles.classFile(pathbase=dir_name, path=entry.path, size=entry.stat(follow_symlinks=False).st_size))
                 count += 1
                 if qLog[0] and qLog[0].qsize() < 2:
-                    qLog[0].put((qLog[1],[ f"_dir_scan: {count=}", ]))
+                    qLog[0].put(qLog[1],[ f"_dir_scan: {count=} {entry.path=}", ])
             else:
                 if qLog[0] and qLog[0].qsize() < 2:
-                    qLog[0].put((qLog[1],f"dir_scan dir skip count={count} @{count/(time.time()-t):.3f}s t={t}   ext={os.path.splitext(entry.name)[1]} f={os.path.join(dir_name, entry.name)}"))
+                    qLog[0].put(qLog[1],f"dir_scan dir skip count={count} @{count/(time.time()-t):.3f}s t={t}   ext={os.path.splitext(entry.name)[1]} f={os.path.join(dir_name, entry.name)}")
             if globals.exitFlag:
                 break
             if count > max:
                 print("Debug call files.save")
                 files.save(pathbase=dir_name, fileHashName="/tmp/save-pesDirSyncAB.txt")
                 break
-    if qLog[0]: qLog[0].put((qLog[1],f"dir_scan exit count={count} dir_name={dir_name}"))
+    if qLog[0]: qLog[0].put(qLog[1],f"dir_scan exit count={count} dir_name={dir_name}")
     return files  # classFiles
 
 

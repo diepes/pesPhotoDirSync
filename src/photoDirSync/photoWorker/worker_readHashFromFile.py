@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.8
 '''
     (c) Pieter Smit 2020 GPL3
     - Scan two dirs (Photos) , generate file hash for each

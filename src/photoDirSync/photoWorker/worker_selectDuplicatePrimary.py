@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.8
 '''
     (c) Pieter Smit 2020 GPL3
     - Scan two dirs (Photos) , generate file hash for each
@@ -12,18 +11,11 @@ import asyncio
 import concurrent.futures  # ThreadPoolExecutor for hash
 import hashlib
 import os
-#import threading  # run PySimpleGui in own thread, comms through queue
 import queue
 import re
-#import EXIF
-##import pyexiv2
-# from PIL import Image, ImageTk
-# import io
 import sys
 import time
 from dataclasses import dataclass
-
-#from . import photoGui
 from .. import classFiles, globals
 
 
@@ -52,7 +44,7 @@ async def select_duplicate_primary(files: classFiles.classFiles,
         for m in range(1, 13):
             dirsRemove.append(f"/{int(y)}/{int(m):0>2d}/")
             # print(f"/{int(y)}/{int(m):0>2d}/")
-    falldel: list(classFile) = []
+    falldel: list(classFiles.classFile) = []
     for key,fl in files.items_hash():  # loop through file hash's  v=list(fileObj)
         if len( fl ) > 1:
             if files.getHashFileSize(key) == 0:

@@ -70,7 +70,7 @@ async def select_duplicate_primary(files: classFiles.classFiles,
                         if os.path.dirname(f.get_filename()) == os.path.dirname(fkeep[0].get_filename()):
                             fdel.append(f)
                             c['del'] += 1
-                            print(f" Del {f.get_firename()} in same path as matching {fkeep[0].get_filename()}")
+                            print(f" Del {f.get_filename()} in same path as matching {fkeep[0].get_filename()}")
                         else:
                             fkeep.append(f)
                     else:

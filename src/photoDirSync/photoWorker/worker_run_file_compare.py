@@ -31,7 +31,7 @@ async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo)
     t = time.time()
     qLog[0].put(qLog[1],f"run_file_compare: start...")
     tstart = time.time()
-    _dir_scan(files=files, dir_name=dir,
+    await _dir_scan(files=files, dir_name=dir,
               whitelist=["gif", "GIF", "jpg" , "JPG", "jpeg", "png", "PNG", "mp4" ],
               qLog=qLog , max=100000,
               )
@@ -77,7 +77,7 @@ async def run_file_compare( files: classFiles.classFiles, dir: str, qLog, qInfo)
     print("The End. run_file_compare()")
 
 
-def _dir_scan(dir_name,
+async def _dir_scan(dir_name,
               whitelist,
               files: classFiles.classFiles,
               qLog=(None,""),
@@ -91,10 +91,13 @@ def _dir_scan(dir_name,
         for entry in os.scandir(path):
             if entry.is_dir(follow_symlinks=False):
                 yield from scantree(entry.path)
+                #tree = scantree(entry.path)
+                #yield tree
             else:
                 yield entry
     #
     count=0
+    c_skip=0
     t=time.time()
     if qLog[0]:
         qLog[0].put(qLog[1],f"{count=} dir_scan dir_name={dir_name}")
@@ -103,17 +106,20 @@ def _dir_scan(dir_name,
             if entry.is_file() and os.path.splitext(entry.name)[1][1:] in whitelist:
                 files.add(classFiles.classFile(pathbase=dir_name, path=entry.path, size=entry.stat(follow_symlinks=False).st_size))
                 count += 1
-                if qLog[0] and qLog[0].qsize() < 2:
-                    qLog[0].put(qLog[1],[ f"_dir_scan: {count=} {entry.path=}", ])
+                if qLog[0] and qLog[0].qsize() < 1:
+                    qLog[0].put(qLog[1],[ f"_dir_scan: {count=} {c_skip=} @{count/(time.time()-t):.0f}/s  {files.getNumDuplicateFiles()}dup {entry.path=}", ])
             else:
                 if qLog[0] and qLog[0].qsize() < 2:
-                    qLog[0].put(qLog[1],f"dir_scan dir skip count={count} @{count/(time.time()-t):.3f}s t={t}   ext={os.path.splitext(entry.name)[1]} f={os.path.join(dir_name, entry.name)}")
+                    c_skip += 1
+                    qLog[0].put(qLog[1],f"dir_scan dir skip count={count} @{count/(time.time()-t):.1f}s t={t}   ext={os.path.splitext(entry.name)[1]} f={os.path.join(dir_name, entry.name)}")
             if globals.exitFlag:
                 break
             if count > max:
                 print("Debug call files.save")
                 files.save(pathbase=dir_name, fileHashName="/tmp/save-pesDirSyncAB.txt")
                 break
+            await asyncio.sleep(0) # yield event loop to others
+
     if qLog[0]: qLog[0].put(qLog[1],f"dir_scan exit count={count} dir_name={dir_name}")
     return files  # classFiles
 

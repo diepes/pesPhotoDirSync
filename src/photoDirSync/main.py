@@ -30,17 +30,15 @@ import time
 import asyncio
 import threading  # run PySimpleGui in own thread, comms through queue
 from . import msgQueue
+# For debug add tracemalloc - better async tracebacks.
+import tracemalloc
+tracemalloc.start()
 
 def start_photoGui_thread(qGui, qWorker):
     # 1/2 Start gui (thread)
     thread_id_gui = threading.Thread(target=photoGui.gui_run, args=(qGui,qWorker,), daemon=True)
     thread_id_gui.start()
 
-def run_main_worker_until_done(qGui, qWorker, files):
-    # 2/2 Start main worker (asyncio)
-    loop = asyncio.get_event_loop()
-    loop.set_debug(True)  # disable for production
-    loop.run_until_complete( photoWorker.worker_run(qFromGui=qWorker, qToGui=qGui, files=files) )
 
 def run():
     ''' Start PySimpleGui in own thread and then asyncio worker 
@@ -51,7 +49,8 @@ def run():
     start_photoGui_thread(qGui=qGui, qWorker=qWorker)
 
     files = classFiles.classFiles()  # Keeps photo file info, and hash etc.
-    run_main_worker_until_done(qGui, qWorker, files)
+    #run_main_worker_until_done(qGui, qWorker, files)
+    asyncio.run( photoWorker.worker_run(qFromGui=qWorker, qToGui=qGui, files=files) )
 
     globals.exitFlag=True
 

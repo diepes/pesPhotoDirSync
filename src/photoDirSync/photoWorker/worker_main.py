@@ -29,7 +29,8 @@ async def readHashdeepIntoFiles(files, filename, qToGui, qLabel="lb1"):
                                 c=counters,
                                 #20210321-hashdeep.hash.txt",
                                 )
-    qToGui.put(qLabel,f"hashdeep: from csv {fn_hashdeep} in {time.time()-t_hashdeep:.1f}s found {files.getNumDuplicateFiles()} duplicates ... ")
+    qToGui.put(qLabel,f"hashdeep: load  {len(files)} from csv {fn_hashdeep} in "+
+                      f"{time.time()-t_hashdeep:.1f}s found {files.getNumDuplicateFiles()} duplicates ... ")
     print(f"worker_main: Duplicates in files: {files.getNumDuplicateFiles()} ")
 
     await worker_selectDuplicatePrimary.select_duplicate_primary(
@@ -41,24 +42,30 @@ async def readHashdeepIntoFiles(files, filename, qToGui, qLabel="lb1"):
 async def worker_run(qFromGui: queue, qToGui: queue, files: classFiles) -> None:
     ''' main worker thread uses q's to talk to gui'''
     print("Its photoWorker.worker_main.worker_run().")
-    qToGui.put("lb1",f"Its main worker. START")
     dirPrimary = os.path.expanduser("~/Pictures/Photos")
+    hashDeep="/hashdeep/20211229-hashdeep.hash.txt"
+    qToGui.put("lb1",f"Its worker_main. STARTED.  {dirPrimary=} + {hashDeep=}")
+    task_hash = asyncio.create_task(
+        readHashdeepIntoFiles(files=files, filename=dirPrimary+hashDeep, qToGui=qToGui, qLabel="lb1"),
+        name = "load_hashdeep",
+    )
 
-    await readHashdeepIntoFiles(files=files, filename=dirPrimary+"/hashdeep/20211229-hashdeep.hash.txt", qToGui=qToGui, qLabel="lb1")
-
-    asyncio.ensure_future(worker_run_file_compare.run_file_compare( dir=dirPrimary, files=files,
+    task_compare = asyncio.create_task(
+        worker_run_file_compare.run_file_compare( dir=dirPrimary, files=files,
                                             qLog=(qToGui,"lb2"),
                                             qInfo=(qToGui,"TextInfo1"),
-                                          )
-                         )
+                                          ),
+        name = "file_compare",
+    )
+
     while not globals.exitFlag:
         try:
-            event,values = qFromGui.get_nowait()    # see if something has been posted to Queue
-        except queue.Empty:                     # get_nowait() will get exception when Queue is empty
-            event = None                      # nothing in queue so do nothing
+            event,values = qFromGui.get_nowait() # see if something has been posted to Queue
+        except queue.Empty: # get_nowait() will get exception when Queue is empty
+            event = None  # nothing in queue so do nothing
             await asyncio.sleep(1)
         if event:
-            print(f"photoDirSync.py main: qFromGui {event=} {values=} {globals.exitFlag=}")
+            print(f"worker_main: qFromGui {event=} {values=} {globals.exitFlag=}")
             if event == "SaveImg":
                 qToGui.put("lb1",f"Got [SaveImg] event in photoMain.py form qFromGui ")
 

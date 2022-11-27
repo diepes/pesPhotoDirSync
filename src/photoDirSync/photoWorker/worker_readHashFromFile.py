@@ -36,6 +36,7 @@ async def readHashFromFile(files: classFiles.classFiles,
     with open(filename) as csvfile:
         csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
         for counter,row in enumerate( csvreader ):
+            if counter % 1000 == 0: await asyncio.sleep(0) # yield to event loop
             if row[0][0] in [ "%", "#"]:
                 ## print(', '.join(row))
                 if "Invoked from:" in row[0]:

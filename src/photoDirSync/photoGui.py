@@ -24,26 +24,27 @@ def gui_run(qFromWorker,qToWorker):
         window = gui_setup(x=1080,y=1920,scale=0.3)
         logsContent=[]
         listboxContent = { "lb1":[], "lb2":[] }
-        event, values = window.read(timeout=10)
+        w_event, w_values = window.read(timeout=10)
         window.Element('lb1').Update(["lb1"])
         window['lb2'].Update(values=["lb2"])
         while True:
-            event, values = window.read(timeout=100)  # wait for up to 100 ms for a GUI event
-            if event != "__TIMEOUT__":
-                print(f"gui_run: {event=} {values=}")
-            if event == sg.WIN_CLOSED or event == 'Exit' or globals.exitFlag == True:
+            w_event, w_values = window.read(timeout=100)  # wait for up to 100 ms for a GUI w_event
+            if w_event != "__TIMEOUT__":
+                print(f"gui_run: window.read: {w_event=} {w_values=}")
+            if w_event == sg.WIN_CLOSED or w_event == 'Exit' or globals.exitFlag == True:
                 globals.exitFlag=True
                 qToWorker.put("gui_state","Gui Quitting.")
                 break
-            elif event == 'Show':
+            elif w_event == 'Show':
                 # Update the "output" text element to be the value of "input" element
-                window['-OUTPUT-'].update(values['-IN-'])
+                window['-OUTPUT-'].update(w_values['-IN-'])
                 # In older code you'll find it written using FindElement or Element
-                # window.FindElement('-OUTPUT-').Update(values['-IN-'])
+                # window.FindElement('-OUTPUT-').Update(w_values['-IN-'])
                 # A shortened version of this update can be written without the ".Update"
-                # window['-OUTPUT-'](values['-IN-'])
-            elif event != "__TIMEOUT__":
-                qToWorker.put( event,values )
+                # window['-OUTPUT-'](w_values['-IN-'])
+            elif w_event != "__TIMEOUT__":
+                print(f"gui_run: window.read: {w_event=} not __TIMEOUT__ send to worker")
+                qToWorker.put( w_event,w_values )
             # --------------- Read next message coming in from threads ---------------
             try:
                 qevent,qvalue = qFromWorker.get_nowait()    # see if something has been posted to Queue
@@ -58,6 +59,7 @@ def gui_run(qFromWorker,qToWorker):
                 del logsContent[50:]
             elif qevent in ["lb1", "lb2"]:
                 # lb1 or 2, qvalues = list of text lines
+                if qevent == "lb1": print(f"gui_run received qevent from qFromWorker {qevent=} {qvalue=}")
                 if not isinstance(qvalue, list): qvalue = listboxContent[qevent] + [qvalue, ]
                 window[qevent].update( values=qvalue )
                 ## print(f"photoGui.py update {qevent=} with {qvalue=} {listboxContent[qevent]=}... ")

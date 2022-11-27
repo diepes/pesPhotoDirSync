@@ -9,12 +9,12 @@ from . import globals
 ##import pyexiv2
 # from PIL import Image, ImageTk
 # import io
-import sys
+#import sys
 import os
-import re
+#import re
 import time
-import asyncio
-import queue
+#import asyncio
+#import queue
 import hashlib
 
 
